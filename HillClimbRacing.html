@@ -1,0 +1,687 @@
+// ...existing code...
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HillClimbRacing — Single File Prototype</title>
+<style>
+  :root{
+    --ui-bg: rgba(255,255,255,0.9);
+    --accent: #ef5350;
+    --muted: #6b6b6b;
+    --glass: rgba(255,255,255,0.85);
+  }
+  html,body{height:100%;margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(#bfe9ff,#eafcff);display:flex;align-items:center;justify-content:center}
+  .container{width:min(1200px,98vw);height:min(720px,96vh);position:relative;box-shadow:0 18px 48px rgba(10,20,30,0.12);border-radius:12px;overflow:hidden;background:linear-gradient(#eaf6ff,#dfeff6)}
+  canvas{display:block;width:100%;height:100%;background:transparent}
+  /* UI Panels */
+  .ui { position:absolute; left:12px; top:12px; z-index:20; display:flex; gap:10px; align-items:center; }
+  .panel { background:var(--glass); padding:8px 10px; border-radius:8px; box-shadow:0 6px 20px rgba(10,10,10,0.06); }
+  .panel.small { padding:6px 8px; font-size:14px; color:#111; }
+  .panel.big { padding:12px 14px; font-size:15px; }
+  .right { position:absolute; right:12px; top:12px; display:flex; gap:10px; z-index:20; }
+  .bottombar { position:absolute; left:50%; transform:translateX(-50%); bottom:12px; z-index:20; display:flex; gap:8px; }
+  .btn { background:linear-gradient(#fff,#f3f3f3); border-radius:8px; padding:8px 12px; cursor:pointer; border:1px solid rgba(0,0,0,0.04); box-shadow:0 6px 16px rgba(0,0,0,0.06); }
+  .btn.primary { background:linear-gradient(var(--accent), #e53935); color:#fff; border:0; }
+  .menu { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:40; pointer-events:auto; }
+  .menu .card { width:520px; background:rgba(255,255,255,0.96); padding:18px; border-radius:12px; box-shadow:0 18px 48px rgba(10,20,30,0.12); text-align:left; }
+  .menu h1{margin:0 0 8px 0; font-size:20px}
+  .menu p{margin:0 0 12px 0;color:var(--muted)}
+  .menu .row { display:flex; gap:8px; margin-bottom:8px; }
+  .vehicle-tile { flex:1; padding:8px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:#fff; cursor:pointer; text-align:center }
+  .vehicle-tile.selected { outline:3px solid rgba(239,83,80,0.12) }
+  .statline{display:flex;gap:8px;align-items:center}
+  .touch-controls { position:absolute; right:12px; bottom:12px; z-index:20; display:flex; gap:8px; flex-direction:column; }
+  .touch { width:68px; height:56px; background:rgba(255,255,255,0.9); border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:700; user-select:none; box-shadow:0 8px 20px rgba(0,0,0,0.08); }
+  .hide-mobile { display:inline-block; }
+  @media (max-width:720px){ .hide-mobile { display:none } .vehicle-tile { padding:6px } .card{width:92vw} .touch{width:64px;height:52px} }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <canvas id="game"></canvas>
+
+  <div class="ui">
+    <div class="panel small" id="hud-stats">
+      Distanz: <b id="ui-dist">0 m</b> &nbsp; | &nbsp;
+      Münzen: <b id="ui-coins">0</b> &nbsp; | &nbsp;
+      Treibstoff: <b id="ui-fuel">100%</b>
+    </div>
+    <div class="panel small" id="hud-best">Best: <b id="ui-best">0 m</b></div>
+  </div>
+
+  <div class="right">
+    <div class="panel big">Fahrzeug: <span id="ui-vehicle">Starter</span></div>
+    <div class="panel big"><button class="btn" id="btn-menu">Menü</button></div>
+  </div>
+
+  <div class="bottombar hide-mobile">
+    <div class="panel small">Steuerung: Pfeil Rechts = Gas · Pfeil Links = Bremse · Pfeil Oben/Unten = Kippen</div>
+  </div>
+
+  <div class="touch-controls">
+    <div class="touch" id="btn-tilt-up">⤴</div>
+    <div class="touch" id="btn-gas">→</div>
+    <div class="touch" id="btn-brake">←</div>
+    <div class="touch" id="btn-tilt-down">⤵</div>
+  </div>
+
+  <!-- MENU / GARAGE -->
+  <div class="menu" id="menu" style="display:flex;pointer-events:auto">
+    <div class="card">
+      <h1>Hill Climb — Menü</h1>
+      <p>Wähle Fahrzeug und Upgrades. Spielziel: so weit wie möglich fahren ohne umzukippen oder ohne Benzin liegenzubleiben.</p>
+      <div class="row">
+        <div style="width:58%;padding-right:8px">
+          <div style="margin-bottom:6px"><b>Fahrzeuge</b></div>
+          <div id="vehicles" style="display:flex;gap:8px">
+            <!-- vehicle tiles inserted here -->
+          </div>
+        </div>
+        <div style="width:42%">
+          <div style="margin-bottom:6px"><b>Upgrades</b></div>
+          <div id="upgrades" style="display:flex;flex-direction:column;gap:8px">
+            <!-- upgrades -->
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:12px">
+        <div><b>Guthaben:</b> <span id="shop-coins">0</span> Münzen</div>
+        <div>
+          <button class="btn" id="btn-start" class="primary">Spielen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// HillClimbRacing.html - Single-file prototype
+// Inhalt: Terrain, Fahrzeug-Physik (vereinfachte Federung), HUD, Menu mit Fahrzeugauswahl & Upgrades, Speicherung via localStorage.
+// Originalgefühl wird angestrebt, aber Code & Assets sind originalfrei und eigenständig erstellt.
+
+// --------------------------- Utilities ---------------------------
+const qs = sel => document.querySelector(sel);
+const qsa = sel => Array.from(document.querySelectorAll(sel));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// --------------------------- Globals & Canvas ---------------------------
+const canvas = qs('#game');
+const ctx = canvas.getContext('2d');
+let DPR = Math.max(1, window.devicePixelRatio || 1);
+function resizeCanvas(){
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * DPR);
+  canvas.height = Math.floor(rect.height * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+function fitCanvasToContainer() {
+  // container size
+  const parent = canvas.parentElement;
+  const style = getComputedStyle(parent);
+  const w = parent.clientWidth - parseFloat(style.paddingLeft || 0) - parseFloat(style.paddingRight || 0);
+  const h = parent.clientHeight - parseFloat(style.paddingTop || 0) - parseFloat(style.paddingBottom || 0);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  resizeCanvas();
+}
+window.addEventListener('resize', fitCanvasToContainer);
+fitCanvasToContainer();
+
+// --------------------------- Game State ---------------------------
+const state = {
+  running: false,
+  paused: false,
+  frame: 0,
+  score: 0,
+  best: parseInt(localStorage.getItem('hcr_best') || '0', 10),
+  coins: parseInt(localStorage.getItem('hcr_coins') || '0', 10)
+};
+
+// UI refs
+const ui = {
+  dist: qs('#ui-dist'),
+  coins: qs('#ui-coins'),
+  fuel: qs('#ui-fuel'),
+  best: qs('#ui-best'),
+  shopCoins: qs('#shop-coins'),
+  vehicleName: qs('#ui-vehicle')
+};
+ui.best.textContent = state.best;
+ui.coins.textContent = state.coins;
+ui.shopCoins.textContent = state.coins;
+
+// --------------------------- Vehicles & Upgrades ---------------------------
+const VEHICLES = [
+  { id:'starter', name:'Starter', mass: 22, wheelRadius:28, wheelBase: 140, power: 1.0, suspension: 1.0, traction: 0.9, fuelCap:100, price:0 },
+  { id:'jeep', name:'Jeep', mass: 30, wheelRadius:32, wheelBase:150, power:1.25, suspension:1.1, traction:0.95, fuelCap:110, price:200 },
+  { id:'truck', name:'Truck', mass:40, wheelRadius:36, wheelBase:180, power:0.95, suspension:1.4, traction:1.0, fuelCap:160, price:500 }
+];
+
+const UPGRADES = {
+  power: { name:'Motor', level:0, baseCost:150, max:5 },
+  suspension: { name:'Federung', level:0, baseCost:120, max:5 },
+  traction: { name:'Reifen', level:0, baseCost:100, max:5 },
+  tank: { name:'Tank', level:0, baseCost:200, max:4 }
+};
+
+// load saved upgrades & selected vehicle
+const save = JSON.parse(localStorage.getItem('hcr_save') || '{}');
+let selectedVehicleId = save.selectedVehicle || 'starter';
+Object.keys(UPGRADES).forEach(k => {
+  UPGRADES[k].level = (save.upgrades && save.upgrades[k]) ? save.upgrades[k] : 0;
+});
+
+// save utility
+function persist() {
+  localStorage.setItem('hcr_save', JSON.stringify({
+    selectedVehicle: selectedVehicleId,
+    upgrades: Object.fromEntries(Object.keys(UPGRADES).map(k => [k, UPGRADES[k].level]))
+  }));
+  localStorage.setItem('hcr_coins', String(state.coins));
+  localStorage.setItem('hcr_best', String(state.best));
+}
+
+// --------------------------- Terrain Generation ---------------------------
+// Generate long terrain using combined sinusoids and noise for natural hills.
+const WORLD = { length: 60000 }; // in world px
+const TERRAIN_STEP = 8;
+let terrain = [];
+
+function generateTerrain(){
+  terrain = [];
+  for(let x=0;x<=WORLD.length;x += TERRAIN_STEP){
+    const t = x / 500;
+    let y = 520 + Math.sin(t) * 120 + Math.sin(t*0.37) * 60 + Math.sin(t*0.12) * 28;
+    y += (perlin1D(x*0.002) * 50);
+    // add occasional cliffs & ramps
+    if (Math.random() < 0.0009) y -= 80 + Math.random()*140;
+    terrain.push({x: x, y: y});
+  }
+  // smoothing
+  for(let k=0;k<3;k++){
+    for(let i=1;i<terrain.length-1;i++){
+      terrain[i].y = (terrain[i-1].y + terrain[i].y + terrain[i+1].y)/3;
+    }
+  }
+}
+function sampleHeight(x){
+  x = clamp(x, 0, WORLD.length);
+  const i = Math.floor(x / TERRAIN_STEP);
+  const a = terrain[i], b = terrain[i+1] || a;
+  const t = (x - a.x) / (b.x - a.x || 1);
+  return a.y*(1-t) + b.y*t;
+}
+
+// Simple deterministic 1D noise (coherent-ish)
+function perlin1D(x) {
+  // value noise
+  const xi = Math.floor(x);
+  const xf = x - xi;
+  const r1 = (Math.sin(xi * 127.1 + 311.7) * 43758.5453) % 1;
+  const r2 = (Math.sin((xi+1) * 127.1 + 311.7) * 43758.5453) % 1;
+  const u = xf*xf*(3-2*xf);
+  return r1*(1-u) + r2*u;
+}
+
+// Place pickups (coins & fuel)
+let pickups = [];
+function placePickups(){
+  pickups = [];
+  for(let x=300;x<WORLD.length-1200;x += 450 + Math.floor(Math.random()*600)){
+    const type = Math.random() < 0.82 ? 'coin' : 'fuel';
+    pickups.push({x: x + Math.random()*140, y: sampleHeight(x), type, collected:false});
+  }
+}
+
+// --------------------------- Vehicle Simulation ---------------------------
+let vehicle = null;
+
+function spawnVehicle(id){
+  const base = VEHICLES.find(v => v.id === id) || VEHICLES[0];
+  const upgrades = getUpgradeFactors();
+  vehicle = {
+    id: base.id,
+    name: base.name,
+    mass: base.mass * (1 + upgrades.massBonus),
+    wheelRadius: base.wheelRadius,
+    wheelBase: base.wheelBase,
+    power: base.power * upgrades.power,
+    suspensionStiffness: 2400 * (1 / upgrades.suspension), // lower => softer
+    suspensionDamping: 380 * upgrades.suspension,
+    traction: base.traction * upgrades.traction,
+    fuelCap: base.fuelCap + upgrades.tank,
+    // dynamic state
+    x: 160,
+    vx: 0,
+    y: sampleHeight(160) - 70,
+    vy: 0,
+    angle: 0,
+    omega: 0,
+    fuel: base.fuelCap + upgrades.tank,
+    coins: 0,
+    wheelRot: 0
+  };
+  ui.vehicleName.textContent = vehicle.name;
+  persist();
+}
+
+function getUpgradeFactors(){
+  // translate upgrade levels to multipliers
+  const p = 1 + UPGRADES.power.level * 0.16;
+  const s = 1 - UPGRADES.suspension.level * 0.08; // lower multiplier => softer suspension value
+  const t = 1 + UPGRADES.traction.level * 0.08;
+  const tankAdd = UPGRADES.tank.level * 30;
+  return { power: p, suspension: s, traction: t, tank: tankAdd, massBonus: UPGRADES.tank.level * 0.03 };
+}
+
+// suspension model uses two wheel contact points (front/rear)
+function wheelOffsets(){
+  return { front: vehicle.wheelBase*0.5, rear: -vehicle.wheelBase*0.5 };
+}
+
+// collision and contact helpers
+function wheelWorldPos(offset){
+  const cos = Math.cos(vehicle.angle), sin = Math.sin(vehicle.angle);
+  const cx = vehicle.x + cos * offset - sin * 0;
+  const cy = vehicle.y + sin * offset + cos * 0;
+  return {x: cx, y: cy};
+}
+
+// main physics step (semi-implicit Euler)
+function stepPhysics(dt, input){
+  const offsets = wheelOffsets();
+  const wF = wheelWorldPos(offsets.front);
+  const wR = wheelWorldPos(offsets.rear);
+  // ground heights
+  const gF = sampleHeight(wF.x);
+  const gR = sampleHeight(wR.x);
+  // wheel bottom positions
+  const bottomF = wF.y + vehicle.wheelRadius;
+  const bottomR = wR.y + vehicle.wheelRadius;
+  const compressionF = clamp(bottomF - gF, 0, 200);
+  const compressionR = clamp(bottomR - gR, 0, 200);
+
+  // compute spring forces (upwards)
+  const k = vehicle.suspensionStiffness;
+  const c = vehicle.suspensionDamping;
+  // use chassis vertical velocity approximation
+  const vsy = vehicle.vy;
+  const springF = -k * compressionF - c * vsy;
+  const springR = -k * compressionR - c * vsy;
+
+  // vertical forces
+  const Fg = vehicle.mass * 2200 * -1; // gravity tuned px/s^2
+  const Fy = springF + springR + Fg;
+  vehicle.vy += (Fy / vehicle.mass) * dt;
+  // horizontal driving force
+  let drive = 0;
+  if ((input.gas || input.gasTouch) && vehicle.fuel > 0){
+    drive += vehicle.power * 1800; // forward force scale
+    vehicle.fuel = clamp(vehicle.fuel - 14 * dt, 0, vehicle.fuelCap + 0.001);
+  }
+  if (input.brake || input.brakeTouch){
+    drive -= 2600;
+  }
+  // adjust drive by traction depending on slope and contact
+  const tractionFactor = (compressionF > 0 || compressionR > 0) ? vehicle.traction : vehicle.traction*0.5;
+  const totalFx = drive * tractionFactor - vehicle.vx * 12; // rolling resistance
+  vehicle.vx += (totalFx / vehicle.mass) * dt;
+
+  // integrate position
+  vehicle.x += vehicle.vx * dt * 60; // tuned scale for feel
+  vehicle.y += vehicle.vy * dt;
+
+  // angular acceleration from wheel contacts torques
+  const torque = springF * offsets.front + springR * offsets.rear + (drive * (offsets.front*0.2));
+  vehicle.omega += (torque / (vehicle.mass * 12)) * dt;
+  // player tilt control
+  if (input.tiltUp || input.tiltUpTouch) vehicle.omega += -0.02;
+  if (input.tiltDown || input.tiltDownTouch) vehicle.omega += 0.02;
+  vehicle.angle += vehicle.omega * dt;
+  vehicle.omega *= 0.995;
+
+  // ground correction: keep chassis above ground average
+  const groundMid = (gF + gR) / 2;
+  const desiredY = groundMid - 70; // chassis distance above ground
+  vehicle.y += (desiredY - vehicle.y) * clamp(dt*6, 0, 1);
+
+  // wheel rotation visual
+  vehicle.wheelRot += vehicle.vx * 0.06;
+
+  // pickups detection
+  pickups.forEach(p => {
+    if (p.collected) return;
+    if (Math.abs(p.x - vehicle.x) < 36){
+      const pickDist = Math.abs(sampleHeight(p.x) - (vehicle.y + 40));
+      if (pickDist < 80){
+        p.collected = true;
+        if (p.type === 'coin'){ state.coins += 1; vehicle.coins += 1; }
+        else { vehicle.fuel = clamp(vehicle.fuel + 28, 0, vehicle.fuelCap + 0.001); }
+      }
+    }
+  });
+
+  // update HUD values
+  ui.dist.textContent = Math.max(0, Math.round(vehicle.x/10)) + ' m';
+  ui.coins.textContent = state.coins;
+  ui.fuel.textContent = Math.round(vehicle.fuel) + '%';
+  ui.best.textContent = state.best + ' m';
+
+  // check fail conditions
+  if (vehicle.fuel <= 0){
+    // out of fuel: slowly decelerate to stop
+    vehicle.vx *= 0.98;
+  }
+  // tip-over detection: if angle too large and velocity low -> fail
+  if (Math.abs(vehicle.angle) > 1.57 || (Math.abs(vehicle.angle) > 1.2 && Math.abs(vehicle.vx) < 6)){
+    endRun();
+  }
+  // clamp world bounds
+  if (vehicle.x < 0) vehicle.x = 0;
+  if (vehicle.x > WORLD.length - 80) vehicle.x = WORLD.length - 80;
+  // update best score
+  const dist = Math.round(vehicle.x / 10);
+  if (dist > state.best){
+    state.best = dist;
+    ui.best.textContent = state.best + ' m';
+  }
+}
+
+// --------------------------- Input Handling ---------------------------
+const input = { gas:false, brake:false, tiltUp:false, tiltDown:false, gasTouch:false, brakeTouch:false, tiltUpTouch:false, tiltDownTouch:false };
+window.addEventListener('keydown', e => {
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') input.gas = true;
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.brake = true;
+  if (e.code === 'ArrowUp' || e.code === 'KeyW') input.tiltUp = true;
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') input.tiltDown = true;
+  if (e.code === 'Escape') toggleMenu();
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') input.gas = false;
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.brake = false;
+  if (e.code === 'ArrowUp' || e.code === 'KeyW') input.tiltUp = false;
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') input.tiltDown = false;
+});
+
+// touch buttons
+function bindTouch(id, propDown, propUp){
+  const el = qs(id);
+  el.addEventListener('pointerdown', e => { e.preventDefault(); input[propDown] = true; }, {passive:false});
+  el.addEventListener('pointerup', e => { e.preventDefault(); input[propDown] = false; }, {passive:false});
+  el.addEventListener('pointerleave', e => { input[propDown] = false; }, {passive:false});
+}
+bindTouch('#btn-gas', 'gasTouch');
+bindTouch('#btn-brake', 'brakeTouch');
+bindTouch('#btn-tilt-up', 'tiltUpTouch');
+bindTouch('#btn-tilt-down', 'tiltDownTouch');
+
+// --------------------------- Rendering ---------------------------
+function clear(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+function drawBackground(camX){
+  const w = canvas.width / DPR, h = canvas.height / DPR;
+  // sky gradient
+  const g = ctx.createLinearGradient(0,0,w,h*0.9);
+  g.addColorStop(0,'#bfe9ff'); g.addColorStop(1,'#ecfbff');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,w,h);
+  // parallax mountains
+  ctx.save();
+  ctx.translate(- (camX * 0.06) % (w+300), 0);
+  for(let i=-1;i<4;i++){
+    ctx.fillStyle = '#cfe6ef';
+    ctx.beginPath();
+    ctx.moveTo(i*(w/2)-200, h*0.6);
+    ctx.lineTo(i*(w/2)+100, h*0.25);
+    ctx.lineTo(i*(w/2)+420, h*0.6);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+  // sun
+  ctx.fillStyle = '#fff3b0';
+  ctx.beginPath(); ctx.arc(w - 120, 80, 36, 0, Math.PI*2); ctx.fill();
+}
+function drawTerrain(camX){
+  const w = canvas.width / DPR, h = canvas.height / DPR;
+  ctx.save();
+  ctx.translate(-camX, 0);
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  for(let i=0;i<terrain.length;i++){
+    const p = terrain[i];
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.lineTo(WORLD.length, h);
+  ctx.closePath();
+  // ground gradient
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'#8cd07a'); grad.addColorStop(1,'#3f8a3c');
+  ctx.fillStyle = grad;
+  ctx.fill();
+  // stroke
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.stroke();
+  // small stones
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  for(let i=0;i<terrain.length;i+=18){
+    const p = terrain[i];
+    ctx.fillRect(p.x + ((i*7)%40), p.y + 4, 3, 2);
+  }
+  ctx.restore();
+}
+function drawPickups(camX){
+  ctx.save(); ctx.translate(-camX,0);
+  pickups.forEach(p => {
+    if (p.collected) return;
+    const px = p.x, py = sampleHeight(p.x) - 22;
+    if (p.type === 'coin'){
+      // coin
+      ctx.beginPath(); ctx.fillStyle = '#f6c84b'; ctx.arc(px,py,12,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ffd86b'; ctx.fillRect(px-6, py-6, 12,4);
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.stroke();
+    } else {
+      // fuel can
+      ctx.fillStyle = '#ef5350'; ctx.fillRect(px-12, py-18, 24, 28);
+      ctx.fillStyle = '#fff'; ctx.fillRect(px-6, py-8, 12, 6);
+    }
+  });
+  ctx.restore();
+}
+function drawVehicle(camX){
+  // compute wheel positions
+  const offsets = wheelOffsets();
+  const wF = wheelWorldPos(offsets.front);
+  const wR = wheelWorldPos(offsets.rear);
+  const screen = (x) => x - camX;
+
+  // wheel shadows
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  ctx.beginPath(); ctx.ellipse(screen(wF.x), sampleHeight(wF.x) + 18, vehicle.wheelRadius+8, 10, 0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(screen(wR.x), sampleHeight(wR.x) + 18, vehicle.wheelRadius+8, 10, 0,0,Math.PI*2); ctx.fill();
+
+  // wheels
+  function drawWheel(cx, cy, rot){
+    ctx.save(); ctx.translate(screen(cx), cy); ctx.rotate(rot);
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(0,0,vehicle.wheelRadius,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#bdbdbd'; ctx.beginPath(); ctx.arc(0,0,vehicle.wheelRadius*0.5,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  drawWheel(wF.x, sampleHeight(wF.x) - vehicle.wheelRadius, vehicle.wheelRot*0.12);
+  drawWheel(wR.x, sampleHeight(wR.x) - vehicle.wheelRadius, vehicle.wheelRot*0.12);
+
+  // chassis center
+  const cx = (wF.x + wR.x)/2, cy = vehicle.y;
+  ctx.save(); ctx.translate(screen(cx), cy); ctx.rotate(vehicle.angle);
+  // body shadow
+  ctx.fillStyle = '#b71c1c'; roundedRect(ctx, -vehicle.wheelBase*0.9/2, -44, vehicle.wheelBase*0.9, 36, 10, true);
+  // main body
+  ctx.fillStyle = '#e53935'; roundedRect(ctx, -vehicle.wheelBase*0.9/2, -48, vehicle.wheelBase*0.9, 36, 10, true);
+  // windshield
+  ctx.fillStyle = 'rgba(255,255,255,0.65)'; ctx.fillRect(-24, -44, 48, 20);
+  // headlight
+  ctx.fillStyle = '#fff3b0'; ctx.beginPath(); ctx.ellipse(vehicle.wheelBase*0.9/2 - 14, -34, 6, 5, 0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function roundedRect(ctx,x,y,w,h,r,fill){
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.closePath(); if(fill) ctx.fill();
+}
+
+// --------------------------- Camera ---------------------------
+const cam = { x: 0, smooth: 0.08 };
+function updateCamera(){
+  const target = Math.max(0, vehicle.x - (canvas.width / DPR) * 0.3);
+  cam.x += (target - cam.x) * cam.smooth;
+}
+
+// --------------------------- Game Loop ---------------------------
+let lastTime = performance.now();
+function loop(now){
+  const dt = Math.min(0.033, (now - lastTime)/1000);
+  lastTime = now;
+  if (state.running && !state.paused){
+    stepPhysics(dt, input);
+    updateCamera();
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+function render(){
+  clear();
+  drawBackground(cam.x);
+  drawTerrain(cam.x);
+  drawPickups(cam.x);
+  drawVehicle(cam.x);
+}
+
+// --------------------------- Run Lifecycle ---------------------------
+function startRun(){
+  if (!vehicle) spawnVehicle(selectedVehicleId);
+  state.running = true;
+  state.frame = 0;
+  qs('#menu').style.display = 'none';
+  lastTime = performance.now();
+}
+function endRun(){
+  state.running = false;
+  // award coins gained during run
+  state.coins = state.coins + vehicle.coins;
+  if (Math.round(vehicle.x/10) > state.best) state.best = Math.round(vehicle.x/10);
+  persist();
+  // show menu with message
+  qs('#menu').style.display = 'flex';
+  qs('#menu .card h1').textContent = 'Run beendet';
+  qs('#menu .card p').textContent = `Du bist ${Math.round(vehicle.x/10)}m gefahren. Münzen gesammelt: ${vehicle.coins}.`;
+  qs('#shop-coins').textContent = state.coins;
+}
+
+// --------------------------- Menu / Shop UI ---------------------------
+const menuEl = qs('#menu');
+const vehiclesEl = qs('#vehicles');
+const upgradesEl = qs('#upgrades');
+const btnStart = qs('#btn-start');
+const btnMenu = qs('#btn-menu');
+
+function renderMenu(){
+  // vehicles
+  vehiclesEl.innerHTML = '';
+  VEHICLES.forEach(v => {
+    const tile = document.createElement('div');
+    tile.className = 'vehicle-tile' + (v.id === selectedVehicleId ? ' selected' : '');
+    tile.innerHTML = `<div style="font-weight:700">${v.name}</div><div style="font-size:12px;color:var(--muted)">Preis: ${v.price} Münzen</div>`;
+    tile.addEventListener('click', () => {
+      if (v.price > 0 && state.coins < v.price && v.id !== selectedVehicleId){
+        alert('Nicht genug Münzen');
+        return;
+      }
+      if (v.id !== selectedVehicleId && state.coins >= v.price){
+        // buy & select
+        if (v.price > 0){
+          state.coins -= v.price;
+          qs('#shop-coins').textContent = state.coins;
+        }
+        selectedVehicleId = v.id;
+        spawnVehicle(selectedVehicleId);
+        persist();
+      } else {
+        selectedVehicleId = v.id;
+        spawnVehicle(selectedVehicleId);
+      }
+      renderMenu();
+    });
+    vehiclesEl.appendChild(tile);
+  });
+
+  // upgrades
+  upgradesEl.innerHTML = '';
+  Object.keys(UPGRADES).forEach(k => {
+    const u = UPGRADES[k];
+    const cost = Math.floor(u.baseCost * Math.pow(1.9, u.level));
+    const row = document.createElement('div');
+    row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'center';
+    row.innerHTML = `<div><div style="font-weight:700">${u.name}</div><div style="font-size:12px;color:var(--muted)">Level ${u.level}/${u.max}</div></div><div><button class="btn" data-key="${k}" ${u.level >= u.max ? 'disabled' : ''}>Kaufen ${cost}</button></div>`;
+    upgradesEl.appendChild(row);
+    row.querySelector('button').addEventListener('click', () => {
+      if (state.coins < cost){ alert('Nicht genug Münzen'); return; }
+      state.coins -= cost;
+      u.level++;
+      qs('#shop-coins').textContent = state.coins;
+      persist();
+      renderMenu();
+    });
+  });
+
+  qs('#shop-coins').textContent = state.coins;
+  qs('#ui-vehicle').textContent = (VEHICLES.find(v=>v.id===selectedVehicleId)||VEHICLES[0]).name;
+}
+
+// toggle menu
+function toggleMenu(){
+  if (menuEl.style.display === 'none' || menuEl.style.display === '') {
+    renderMenu();
+    menuEl.style.display = 'flex';
+  } else {
+    menuEl.style.display = 'none';
+  }
+}
+
+btnStart.addEventListener('click', () => {
+  // reset menu header
+  qs('#menu .card h1').textContent = 'Hill Climb — Menü';
+  qs('#menu .card p').textContent = 'Wähle Fahrzeug und Upgrades. Spielziel: so weit wie möglich fahren ohne umzukippen oder ohne Benzin liegenzubleiben.';
+  startRun();
+});
+btnMenu.addEventListener('click', () => {
+  toggleMenu();
+  qs('#menu .card h1').textContent = 'Hill Climb — Menü';
+  qs('#menu .card p').textContent = 'Wähle Fahrzeug und Upgrades. Spielziel: so weit wie möglich fahren ohne umzukippen oder ohne Benzin liegenzubleiben.';
+  renderMenu();
+});
+
+// --------------------------- Init & Start ---------------------------
+function init(){
+  generateTerrain();
+  placePickups();
+  spawnVehicle(selectedVehicleId);
+  renderMenu();
+  // attach menu toggle to menu button
+  qs('#menu').style.display = 'flex';
+  qs('#shop-coins').textContent = state.coins;
+  // start main loop
+  requestAnimationFrame(loop);
+}
+init();
+
+// --------------------------- Helpers & Finalize ---------------------------
+// small helper to prevent accidental scroll on mobile controls
+['touchstart','touchmove','touchend','pointerdown','pointerup'].forEach(ev => {
+  document.addEventListener(ev, e => {}, {passive:false});
+});
+</script>
+</body>
+</html>
