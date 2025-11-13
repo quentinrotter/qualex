@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Hill Climb Racing</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #87CEEB;
+  }
+  canvas {
+    display: block;
+    background: linear-gradient(#87CEEB, #c0eaff);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+// --- Einstellungen ---
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+let keys = {};
+let gravity = 0.04;
+let friction = 0.98;
+
+// --- Spielerauto ---
+let car = {
+  x: 200,
+  y: 300,
+  width: 60,
+  height: 20,
+  wheelRadius: 10,
+  speedX: 0,
+  speedY: 0,
+  rotation: 0,
+  onGround: false
+};
+
+// --- Strecke generieren ---
+const hillLength = 1000;
+let terrain = [];
+let lastY = canvas.height * 0.7;
+for (let x = 0; x < hillLength; x++) {
+  lastY += Math.sin(x * 0.1) * 10 + (Math.random() - 0.5) * 10;
+  terrain.push({x: x * 20, y: lastY});
+}
+
+let cameraX = 0;
+
+// --- Steuerung ---
+window.addEventListener('keydown', e => keys[e.key] = true);
+window.addEventListener('keyup', e => keys[e.key] = false);
+
+// --- Hauptupdate ---
+function update() {
+  // Bewegung
+  if (keys['ArrowRight']) car.speedX += 0.3;
+  if (keys['ArrowLeft']) car.speedX -= 0.3;
+  if (keys[' ']) car.speedY = -8; // Sprung (Testweise)
+
+  car.speedX *= friction;
+  car.x += car.speedX;
+  car.y += car.speedY;
+  car.speedY += gravity;
+
+  // Boden finden (einfachster Ansatz)
+  let groundY = getGroundY(car.x);
+  if (car.y + car.height / 2 > groundY) {
+    car.y = groundY - car.height / 2;
+    car.speedY = 0;
+    car.onGround = true;
+  } else {
+    car.onGround = false;
+  }
+
+  // Kamera folgt Auto
+  cameraX = car.x - canvas.width / 2;
+
+  draw();
+  requestAnimationFrame(update);
+}
+
+// --- Bodenhöhe ermitteln ---
+function getGroundY(x) {
+  let index = Math.floor(x / 20);
+  if (index < 0) index = 0;
+  if (index >= terrain.length - 1) return terrain[terrain.length - 1].y;
+  let t1 = terrain[index], t2 = terrain[index + 1];
+  let ratio = (x - t1.x) / (t2.x - t1.x);
+  return t1.y + (t2.y - t1.y) * ratio;
+}
+
+// --- Zeichnen ---
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Boden zeichnen
+  ctx.beginPath();
+  ctx.moveTo(terrain[0].x - cameraX, terrain[0].y);
+  for (let i = 1; i < terrain.length; i++) {
+    ctx.lineTo(terrain[i].x - cameraX, terrain[i].y);
+  }
+  ctx.lineTo(terrain[terrain.length - 1].x - cameraX, canvas.height);
+  ctx.lineTo(0 - cameraX, canvas.height);
+  ctx.closePath();
+  ctx.fillStyle = '#228B22';
+  ctx.fill();
+
+  // Auto zeichnen
+  let wheelOffset = car.width / 3;
+  let frontWheelX = car.x + wheelOffset - cameraX;
+  let backWheelX = car.x - wheelOffset - cameraX;
+  let wheelY = car.y + car.height / 2;
+
+  // Räder
+  ctx.fillStyle = "#222";
+  ctx.beginPath();
+  ctx.arc(frontWheelX, wheelY, car.wheelRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(backWheelX, wheelY, car.wheelRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Karosserie
+  ctx.fillStyle = "#ff3333";
+  ctx.fillRect(car.x - car.width/2 - cameraX, car.y - car.height/2, car.width, car.height);
+
+  // HUD
+  ctx.fillStyle = "black";
+  ctx.font = "20px Arial";
+  ctx.fillText("Geschwindigkeit: " + car.speedX.toFixed(1), 20, 30);
+}
+
+// Start
+update();
+</script>
+</body>
+</html>
