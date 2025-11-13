@@ -75,6 +75,14 @@ function update() {
     car.y = groundY - car.height / 2;
     car.speedY = 0;
     car.onGround = true;
+    // compute terrain slope around car.x and set car rotation to match (smoothly)
+    const delta = 1; // small sample distance in world units
+    const y1 = getGroundY(car.x - delta);
+    const y2 = getGroundY(car.x + delta);
+    const slope = Math.atan2(y2 - y1, (delta * 2));
+    // smooth interpolation so rotation doesn't snap
+    const blend = 0.2;
+    car.rotation += (slope - car.rotation) * blend;
   } else {
     car.onGround = false;
   }
@@ -112,24 +120,29 @@ function draw() {
   ctx.fillStyle = '#228B22';
   ctx.fill();
 
-  // Auto zeichnen
-  let wheelOffset = car.width / 3;
-  let frontWheelX = car.x + wheelOffset - cameraX;
-  let backWheelX = car.x - wheelOffset - cameraX;
-  let wheelY = car.y + car.height / 2;
 
-  // Räder
+  // Auto zeichnen (zentriert am Fahrzeugmittelpunkt, mit Rotation)
+  ctx.save();
+  // translate to car center in screen coords
+  ctx.translate(car.x - cameraX, car.y);
+  ctx.rotate(car.rotation);
+
+  // Räder (relative to rotated car center)
+  const wheelOffset = car.width / 3;
+  const wheelY = car.height / 2;
   ctx.fillStyle = "#222";
   ctx.beginPath();
-  ctx.arc(frontWheelX, wheelY, car.wheelRadius, 0, Math.PI * 2);
+  ctx.arc(wheelOffset, wheelY, car.wheelRadius, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(backWheelX, wheelY, car.wheelRadius, 0, Math.PI * 2);
+  ctx.arc(-wheelOffset, wheelY, car.wheelRadius, 0, Math.PI * 2);
   ctx.fill();
 
-  // Karosserie
+  // Karosserie (centered at 0,0)
   ctx.fillStyle = "#ff3333";
-  ctx.fillRect(car.x - car.width/2 - cameraX, car.y - car.height/2, car.width, car.height);
+  ctx.fillRect(-car.width/2, -car.height/2, car.width, car.height);
+
+  ctx.restore();
 
   // HUD
   ctx.fillStyle = "black";
