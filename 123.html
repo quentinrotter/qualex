@@ -38,7 +38,8 @@ let car = {
   wheelRadius: 10,
   speedX: 0,
   speedY: 0,
-  rotation: 0,
+    rotation: 0,
+    angularVelocity: 0,
   onGround: false
 };
 
@@ -75,16 +76,35 @@ function update() {
     car.y = groundY - car.height / 2;
     car.speedY = 0;
     car.onGround = true;
-    // compute terrain slope around car.x and set car rotation to match (smoothly)
+    // compute terrain slope around car.x
     const delta = 1; // small sample distance in world units
     const y1 = getGroundY(car.x - delta);
     const y2 = getGroundY(car.x + delta);
     const slope = Math.atan2(y2 - y1, (delta * 2));
-    // smooth interpolation so rotation doesn't snap
+
+    // rotational impulse when slope changes (e.g., hitting a new angle)
+    if (typeof car.prevSlope === 'number') {
+      const ds = slope - car.prevSlope;
+      const thresh = 0.01; // ignore tiny changes
+      if (Math.abs(ds) > thresh) {
+        // impulse proportional to slope change and horizontal speed
+        const impulse = ds * 0.6 * (Math.abs(car.speedX) + 0.5);
+        car.angularVelocity += impulse;
+      }
+    }
+
+    // apply rotation: align smoothly to slope but also apply angularVelocity
     const blend = 0.2;
-    car.rotation += (slope - car.rotation) * blend;
+    car.rotation += (slope - car.rotation) * blend + car.angularVelocity;
+    // damp angular velocity on ground
+    car.angularVelocity *= 0.88;
+    car.prevSlope = slope;
   } else {
     car.onGround = false;
+    // in air: allow angular velocity to rotate the car
+    car.rotation += car.angularVelocity;
+    // slight air damping
+    car.angularVelocity *= 0.995;
   }
 
   // Kamera folgt Auto
