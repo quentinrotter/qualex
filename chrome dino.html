@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Chrome Dino</title>
+<style>
+  :root{
+    --bg-day:#f7f7f7;
+    --bg-night:#111;
+    --ui-bg: rgba(255,255,255,0.92);
+    --ui-fg: #222;
+  }
+  html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:var(--bg-day)}
+  canvas{display:block;width:100%;height:100vh}
+
+  .topbar{
+    position:fixed; left:12px; right:12px; top:12px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:8px 12px; border-radius:8px; background:var(--ui-bg); color:var(--ui-fg);
+    z-index:20; box-shadow:0 6px 20px rgba(0,0,0,0.08); backdrop-filter: blur(4px);
+  }
+  .top-left,.top-right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .score{ font-weight:800; font-size:16px; }
+  .best{ color:#666; font-size:13px; }
+  .hint{ font-size:13px; color:#444; white-space:nowrap; }
+
+  .controls {
+    position:fixed; left:50%; transform:translateX(-50%); bottom:18px; z-index:20;
+    display:flex; gap:10px; align-items:center; pointer-events:auto;
+  }
+  .btn { appearance:none; border:0; background:#2e8b57; color:#fff;
+    padding:8px 12px; border-radius:8px; font-weight:700; cursor:pointer;
+    box-shadow:0 6px 14px rgba(46,139,87,0.18);
+  }
+  .btn.small { padding:6px 8px; font-size:13px; border-radius:6px; background:#c94b4b; box-shadow:0 4px 10px rgba(201,75,75,0.12); }
+
+  @media (max-width:520px){
+    .topbar{flex-direction:column;align-items:stretch;padding:8px}
+    .hint{white-space:normal;text-align:right}
+    .controls{bottom:14px}
+  }
+
+  /* overlays */
+  .overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:50;
+    align-items:center; justify-content:center;
+  }
+  .overlay.show{ display:flex; }
+  .box {
+    width:min(560px, calc(100% - 40px)); background:var(--ui-bg); color:var(--ui-fg);
+    padding:28px; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,0.25); text-align:center;
+  }
+  .title{ font-size:36px; font-weight:900; margin-bottom:12px; text-transform:lowercase; }
+  .sub{ color:#666; margin-bottom:20px; }
+  .go-title{ font-size:36px; font-weight:900; margin-bottom:18px; letter-spacing:2px; }
+  .go-sub{ color:#666; margin-bottom:12px; }
+  .go-score{ font-size:20px; font-weight:800; margin-bottom:14px; }
+  .controls-row{ display:flex; justify-content:center; gap:12px; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Dino game"></canvas>
+
+<div class="topbar" id="topbar">
+  <div class="top-left">
+    <div class="score">Score: <span id="score">00000</span></div>
+    <div class="best">Best: <span id="best">0</span></div>
+  </div>
+  <div class="top-right">
+    <div class="hint">Space / Up = Jump • R = Restart • Tap = jump</div>
+    <button id="reset-best" class="btn small" title="Reset highscore">Reset Best</button>
+  </div>
+</div>
+
+<div class="controls" id="controlsBar">
+  <button id="restart" class="btn" aria-label="Restart">Restart</button>
+</div>
+
+<!-- Game Over overlay -->
+<div id="gameoverOverlay" class="overlay" aria-hidden="true">
+  <div class="box" role="dialog" aria-modal="true">
+    <div class="go-title">GAME OVER</div>
+    <div class="go-sub">You died — try again!</div>
+    <div class="go-score">Score: <span id="finalScore">00000</span></div>
+    <div class="controls-row" id="goControls"></div>
+  </div>
+</div>
+
+<!-- Start overlay -->
+<div id="startOverlay" class="overlay show" aria-hidden="false">
+  <div class="box" role="dialog" aria-modal="true">
+    <div class="title">chrome dino</div>
+    <div class="sub">Press Space or click Start to begin</div>
+    <button id="startBtn" class="btn">Start</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  // elements
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const restartBtn = document.getElementById('restart');
+  const resetBestBtn = document.getElementById('reset-best');
+  const overlay = document.getElementById('gameoverOverlay');
+  const goControls = document.getElementById('goControls');
+  const controlsBar = document.getElementById('controlsBar');
+  const startOverlay = document.getElementById('startOverlay');
+  const startBtn = document.getElementById('startBtn');
+
+  // hi-dpi
+  let DPR = Math.max(1, window.devicePixelRatio || 1);
+  let W = 800, H = 360;
+  function resize(){
+    DPR = Math.max(1, window.devicePixelRatio || 1);
+    W = Math.max(480, innerWidth);
+    H = Math.max(240, innerHeight);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize, {passive:true});
+  resize();
+
+  function floorY(){ return Math.round(H * 0.78); }
+
+  // physics (kept as you had)
+  const GRAV = 3500;
+  // slightly increased jump strengths (both tap and hold)
+  const JUMP_V = -1160;            // main jump (a bit higher)
+  // short/tap jump (less high) and hold window (seconds)
+  const JUMP_V_SHORT = -760;       // tap jump (a bit higher)
+  const JUMP_HOLD_TIME = 0.14;     // if released before this, apply short jump
+  const START_SPEED = 360;
+  const SPEED_INC_PER_100 = 10;
+
+  // dino
+  const dino = { x:80, w:44, h:47, y:0, vy:0, grounded:true, jumping:false, jumpTime:0 };
+
+  // state
+  const state = {
+    speed: START_SPEED,
+    distance: 0,
+    score: 0,
+    best: Number(localStorage.getItem('dino_best')||0),
+    spawnTimer: 0,
+    obstacles: [],
+    clouds: [],
+    gameOver: false,
+    running: false,
+    started: false,
+    day: true,
+    nightTimer: 0
+  };
+  bestEl.textContent = state.best;
+
+  // obstacles
+  const obstacleDefs = [
+    {w:38,h:58},{w:60,h:72},{w:90,h:99}
+  ];
+  const pteroHeights = [floorY() - 140, floorY() - 100, floorY() - 60];
+
+  // input (space starts when not started)
+  const keys = { up:false };
+  window.addEventListener('keydown', e=>{
+    if(!state.started && (e.code==='Space' || e.key==='ArrowUp')){
+      e.preventDefault();
+      startGame();
+      return;
+    }
+    if(e.code==='Space' || e.key==='ArrowUp'){ keys.up = true; e.preventDefault(); }
+    if(e.key==='r' || e.key==='R') restart();
+  });
+  window.addEventListener('keyup', e=>{
+    if(e.code==='Space' || e.key==='ArrowUp'){
+      // if player releases while in the short-hold window, reduce upward velocity
+      if(dino.jumping && dino.jumpTime < JUMP_HOLD_TIME && dino.vy < 0){
+        // make vy less negative to shorten the jump
+        dino.vy = Math.max(dino.vy, JUMP_V_SHORT);
+      }
+      dino.jumping = false;
+      keys.up = false;
+    }
+  });
+  canvas.addEventListener('pointerdown', e=>{
+    if(!state.started){ startGame(); return; }
+    keys.up = true;
+  });
+  canvas.addEventListener('pointerup', ()=>{
+    // treat touch release same as keyup: apply short jump if within window
+    if(dino.jumping && dino.jumpTime < JUMP_HOLD_TIME && dino.vy < 0){
+      dino.vy = Math.max(dino.vy, JUMP_V_SHORT);
+    }
+    dino.jumping = false;
+    keys.up = false;
+  });
+
+  // events
+  startBtn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); if(!state.started) startGame(); }, {passive:false});
+  restartBtn.addEventListener('click', ()=> restart());
+  if(resetBestBtn) resetBestBtn.addEventListener('click', ()=> {
+    if(!confirm('Reset highscore to 0?')) return;
+    state.best = 0;
+    localStorage.setItem('dino_best','0');
+    updateScoreUI();
+  });
+
+  // reset / spawn
+  function reset(){
+    state.speed = START_SPEED;
+    state.distance = 0;
+    state.score = 0;
+    state.spawnTimer = 0;
+    state.obstacles.length = 0;
+    state.clouds.length = 0;
+    state.gameOver = false;
+    state.day = true;
+    state.nightTimer = 0;
+    dino.vy = 0;
+    dino.grounded = true;
+    dino.y = floorY() - dino.h;
+    updateScoreUI();
+  }
+  reset();
+
+  function spawnCloud(){ state.clouds.push({ x: state.distance + W + Math.random()*W, y: 30 + Math.random()*120, s:0.6 + Math.random()*1.2, vx:12 + Math.random()*40 }); }
+
+  function spawnObstacle(){
+    const MAX_ON_SCREEN = 3;
+    if(state.obstacles.length >= MAX_ON_SCREEN) return;
+
+    const usePtero = Math.random() < Math.min(0.08 + state.score/2500, 0.22);
+
+    // base spawn X far ahead
+    let desiredX = state.distance + W + 260 + Math.random() * 240;
+
+    // ensure a sensible minimum gap from the last spawned obstacle (world coords)
+    if(state.obstacles.length){
+      const lastX = Math.max(...state.obstacles.map(o=>o.x));
+      const baseMinGap = 280; // <-- change this to increase/decrease base spacing
+      // slightly scale gap with score so it's less likely to bunch at higher speed
+      const scoreGapBonus = Math.floor(state.score/300) * 20;
+      const minGap = baseMinGap + scoreGapBonus + Math.random()*100;
+      desiredX = Math.max(desiredX, lastX + minGap);
+    }
+
+    // safety: if desiredX is still too close to any existing obstacle, nudge it forward
+    // attempt a few times; if still too close, skip this spawn to avoid overlaps
+    const MIN_SEPARATION = 150; // <-- change this to adjust nudge/clearance
+    for(let attempt=0; attempt<6; attempt++){
+      const tooClose = state.obstacles.some(o => {
+        const sep = Math.abs(o.x - desiredX);
+        // require separation equal to half widths + MIN_SEPARATION
+        const required = (o.w || 48)/2 + MIN_SEPARATION;
+        return sep < required;
+      });
+      if(!tooClose) break;
+      desiredX += MIN_SEPARATION + Math.random()*120;
+    }
+    if(state.obstacles.some(o => Math.abs(o.x - desiredX) < 80)) return; // <-- change 80 to alter final abort threshold
+
+    if(usePtero){
+      const h = pteroHeights[Math.floor(Math.random()*pteroHeights.length)];
+      state.obstacles.push({type:'ptero', x: desiredX, w:64, h:44, y:h, frame:0, frameTimer:0});
+    } else {
+      const r = Math.random();
+      let def;
+      if(r < 0.15) def = obstacleDefs[0];
+      else if(r < 0.75) def = obstacleDefs[1];
+      else def = obstacleDefs[2];
+      state.obstacles.push({type:'cactus', x: desiredX, w:def.w, h:def.h});
+    }
+  }
+
+  function overlap(ax,ay,aw,ah,bx,by,bw,bh){ return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by; }
+
+  // loop
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.033,(now-last)/1000);
+    last = now;
+    if(state.running) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function update(dt){
+    if(state.gameOver) state.speed = Math.max(START_SPEED*0.2, state.speed - 600*dt);
+    else state.speed = START_SPEED + Math.floor(state.score/100)*SPEED_INC_PER_100;
+
+    // start jump when press detected
+    if(keys.up && dino.grounded && !state.gameOver){
+      dino.vy = JUMP_V;
+      dino.grounded = false;
+      keys.up = false;
+      dino.jumping = true;
+      dino.jumpTime = 0;
+    }
+
+    dino.vy += GRAV * dt;
+    dino.y += dino.vy * dt;
+
+    const targetY = floorY() - dino.h;
+    if(dino.y >= targetY){
+      dino.y = targetY;
+      dino.vy = 0;
+      dino.grounded = true;
+      dino.jumping = false;
+      dino.jumpTime = 0;
+    } else {
+      dino.grounded = false;
+      // track how long we've been in the jump (only while rising)
+      if(dino.jumping && dino.vy < 0) dino.jumpTime += dt;
+    }
+
+    state.distance += state.speed * dt;
+    state.score = Math.floor(state.distance / 10);
+    if(state.score > state.best){ state.best = state.score; localStorage.setItem('dino_best', state.best); }
+    updateScoreUI();
+
+    if(Math.random() < 0.02) spawnCloud();
+    for(let i=state.clouds.length-1;i>=0;i--){ const c = state.clouds[i]; c.x += c.vx * dt; if(c.x < state.distance - W*0.6) state.clouds.splice(i,1); }
+
+    state.spawnTimer += dt;
+    const spawnInterval = Math.max(1.2, 2.6 - Math.min(1.4, state.score/300));
+    if(state.spawnTimer > spawnInterval){ spawnObstacle(); state.spawnTimer = 0.4 + Math.random()*1.0; }
+
+    for(let i=state.obstacles.length-1;i>=0;i--){
+      const ob = state.obstacles[i];
+      if(ob.type === 'ptero'){
+        ob.x -= state.speed * dt;
+        ob.frameTimer += dt;
+        if(ob.frameTimer > 0.12){ ob.frame = 1 - ob.frame; ob.frameTimer = 0; }
+        if(ob.x + ob.w < state.distance - 200) state.obstacles.splice(i,1);
+        const obScreenX = ob.x - state.distance + dino.x;
+        if(!state.gameOver && overlap(dino.x,dino.y,dino.w,dino.h, obScreenX, ob.y, ob.w, ob.h)){ state.gameOver = true; onGameOver(); }
+      } else {
+        ob.x -= state.speed * dt;
+        if(ob.x + ob.w < state.distance - 200) state.obstacles.splice(i,1);
+        const obScreenX = ob.x - state.distance + dino.x;
+        if(!state.gameOver && overlap(dino.x,dino.y,dino.w,dino.h, obScreenX, floorY() - ob.h, ob.w, ob.h)){ state.gameOver = true; onGameOver(); }
+      }
+    }
+
+    if(state.score > 0 && state.score % 700 === 0){ state.nightTimer += dt; if(state.nightTimer > 0.5){ state.day = !state.day; state.nightTimer = 0; } } else state.nightTimer = 0;
+  }
+
+  function draw(){
+    if(state.day){ document.documentElement.style.background = 'linear-gradient(#e9eef3,#f7f7f7)'; ctx.fillStyle = '#e9eef3'; }
+    else { document.documentElement.style.background = '#111'; ctx.fillStyle = '#222'; }
+    ctx.fillRect(0,0,W,H);
+
+    for(const c of state.clouds){ const sx = (c.x - state.distance) + dino.x; if(sx < -200 || sx > W + 200) continue; drawCloud(sx, c.y, c.s); }
+
+    const gy = Math.round(floorY()) + 2;
+    ctx.fillStyle = state.day ? '#fff' : '#ddd';
+    ctx.fillRect(0, gy, W, 8);
+    ctx.fillStyle = state.day ? '#e6e6e6' : '#999';
+    ctx.fillRect(0, gy, W, 2);
+
+    for(const ob of state.obstacles){
+      const sx = (ob.x - state.distance) + dino.x;
+      if(sx < -200 || sx > W + 200) continue;
+      if(ob.type === 'ptero') drawPtero(sx, ob.y, ob.w, ob.h, ob.frame); else drawCactus(sx, floorY() - ob.h, ob.w, ob.h);
+    }
+
+    ctx.save();
+    let tilt = 0;
+    if(!dino.grounded) tilt = Math.max(-0.25, Math.min(0.25, -dino.vy / 900));
+    ctx.translate(dino.x + dino.w/2, dino.y + dino.h/2);
+    ctx.rotate(tilt);
+    ctx.fillStyle = state.day ? '#222' : '#eee';
+    roundRect(ctx, -dino.w/2, -dino.h/2, dino.w, dino.h, 6, true, false);
+    ctx.fillStyle = state.day ? '#fff' : '#111';
+    ctx.fillRect(8, -dino.h/4, 4, 4);
+    ctx.restore();
+  }
+
+  function onGameOver(){
+    state.running = false;
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden','false');
+    const fs = document.getElementById('finalScore');
+    if(fs) fs.textContent = state.score.toString().padStart(5,'0');
+    if(goControls && restartBtn && controlsBar.contains(restartBtn)){ goControls.appendChild(restartBtn); }
+    restartBtn.focus();
+  }
+
+  function hideGameOver(){
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden','true');
+    if(controlsBar && restartBtn && !controlsBar.contains(restartBtn)) controlsBar.appendChild(restartBtn);
+    state.running = false;
+  }
+
+  function startGame(){
+    if(state.started) return;
+    startOverlay.classList.remove('show');
+    startOverlay.setAttribute('aria-hidden','true');
+    state.started = true;
+    reset();
+    state.running = true;
+    if(controlsBar && restartBtn && !controlsBar.contains(restartBtn)) controlsBar.appendChild(restartBtn);
+  }
+
+  function restart(){
+    hideGameOver();
+    startOverlay.classList.remove('show');
+    startOverlay.setAttribute('aria-hidden','true');
+    state.started = true;
+    reset();
+    state.running = true;
+    updateScoreUI();
+  }
+  window.restart = restart;
+
+  function updateScoreUI(){ scoreEl.textContent = state.score.toString().padStart(5,'0'); bestEl.textContent = state.best; }
+
+  function roundRect(g,x,y,w,h,r,fill=true,stroke=false){ if(r<0) r=0; const m=Math.min(w/2,h/2); if(r>m) r=m; g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); if(fill) g.fill(); if(stroke) g.stroke(); }
+
+  function drawCloud(x,y,scale=1){ const r = 24 * scale; ctx.save(); ctx.globalAlpha = 0.95; ctx.fillStyle = state.day ? '#fff' : '#ddd'; ctx.beginPath(); ctx.ellipse(x,y,r*1.1,r*0.7,0,0,Math.PI*2); ctx.ellipse(x - r*0.6, y + r*0.06, r*0.8, r*0.55, 0, 0, Math.PI*2); ctx.ellipse(x + r*0.6, y + r*0.02, r*0.9, r*0.6, 0, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+  function drawCactus(x,y,w,h){ ctx.fillStyle = state.day ? '#2c2c2c' : '#eee'; roundRect(ctx,x,y,w,h,6,true,false); ctx.fillStyle = state.day ? '#111' : '#333'; ctx.fillRect(x + w*0.12, y + 6, w*0.22, 3); ctx.fillRect(x + w*0.62, y + 6, w*0.22, 3); }
+  function drawPtero(x,y,w,h,frame){ ctx.fillStyle = state.day ? '#2c2c2c' : '#eee'; roundRect(ctx, x + 6, y + 8, w - 12, h - 12, 6, true, false); ctx.beginPath(); if(frame===0){ ctx.moveTo(x,y + h*0.5); ctx.quadraticCurveTo(x + w*0.25, y - h*0.2, x + w*0.6, y + h*0.4); ctx.quadraticCurveTo(x + w*0.3, y + h*0.35, x, y + h*0.5); } else { ctx.moveTo(x,y + h*0.5); ctx.quadraticCurveTo(x + w*0.25, y + h*0.9, x + w*0.6, y + h*0.4); ctx.quadraticCurveTo(x + w*0.3, y + h*0.35, x, y + h*0.5); } ctx.fill(); }
+
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) state.running=false; else { if(state.started && !state.gameOver) state.running=true; last = performance.now(); requestAnimationFrame(loop); } });
+
+  last = performance.now();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
