@@ -1,0 +1,1341 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HillClimb Racing 1</title>
+        <style>
+            html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial}
+            canvas{display:block;background:#87ceeb;width:100%;height:100vh}
+            #ui{position:fixed;left:12px;top:12px;color:#111;text-shadow:0 1px 0 rgba(255,255,255,0.6)}
+            #ui .score{font-size:20px;font-weight:700}
+            #fuelBar{position:fixed;top:60px;left:12px;width:250px;height:30px;background:rgba(0,0,0,0.4);border-radius:8px;border:3px solid rgba(255,255,255,0.8);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+            #fuelBarFill{height:100%;background:linear-gradient(90deg,#4caf50,#8bc34a);border-radius:5px;transition:width 0.1s,background 0.3s;box-shadow:inset 0 2px 4px rgba(255,255,255,0.4)}
+            #fuelBarFill.low{background:linear-gradient(90deg,#ff5722,#ff9800)}
+            #fuelBarFill.critical{background:linear-gradient(90deg,#d32f2f,#f44336)}
+            #fuelLabel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-weight:700;color:#fff;text-shadow:1px 1px 2px rgba(0,0,0,0.8);font-size:14px;pointer-events:none}
+            #controls{position:fixed;right:12px;bottom:12px;display:flex;gap:8px}
+            .btn{background:rgba(0,0,0,0.6);color:#fff;border-radius:8px;padding:10px 12px;user-select:none}
+            .hint{position:fixed;left:12px;bottom:12px;color:#111;background:rgba(255,255,255,0.85);padding:8px;border-radius:6px}
+            #restart{position:fixed;right:12px;top:12px;padding:6px 10px;border-radius:6px;background:#ff6b6b;color:#fff;border:none}
+            /* touch controls */
+            .touch-controls{position:fixed;left:12px;bottom:12px;display:flex;gap:10px;align-items:center}
+            .control-btn{width:72px;height:72px;border-radius:12px;background:rgba(0,0,0,0.5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;user-select:none}
+            .control-btn.active{background:rgba(0,0,0,0.85)}
+            @media (min-width:800px){ .touch-controls{display:none} }
+            #menuOverlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;gap:25px}
+            #menuOverlay.hidden{display:none}
+            #menuTitle{font-size:64px;font-weight:bold;color:#fff;text-shadow:4px 4px 8px rgba(0,0,0,0.8);margin-bottom:10px}
+            #menuStats{background:rgba(255,255,255,0.15);padding:25px 50px;border-radius:16px;color:#fff;font-size:20px;backdrop-filter:blur(10px);border:2px solid rgba(255,255,255,0.3)}
+            #menuStats div{margin:12px 0;display:flex;justify-content:space-between;gap:40px}
+            #menuStats .label{opacity:0.9}
+            #menuStats .value{font-size:28px;font-weight:bold;color:#ffd700;text-shadow:2px 2px 4px rgba(0,0,0,0.5)}
+            #menuStartBtn, #menuRestartBtn{padding:18px 60px;font-size:32px;font-weight:bold;background:#4caf50;color:#fff;border:none;border-radius:16px;cursor:pointer;transition:all 0.3s;box-shadow:0 6px 20px rgba(0,0,0,0.4);margin:5px}
+            #menuStartBtn:hover, #menuRestartBtn:hover{background:#45a049;transform:scale(1.08);box-shadow:0 8px 25px rgba(0,0,0,0.5)}
+            #menuStartBtn:active, #menuRestartBtn:active{transform:scale(1.02)}
+            #menuRestartBtn{background:#ff6b6b}
+            #menuRestartBtn:hover{background:#ff5252}
+            #menuControls{color:#fff;font-size:16px;opacity:0.85;margin-top:15px;text-align:center}
+            #seasonSelect{display:flex;gap:15px;margin:20px 0;flex-wrap:wrap;justify-content:center}
+            .season-btn{padding:15px 25px;font-size:18px;font-weight:bold;border:3px solid rgba(255,255,255,0.5);border-radius:12px;cursor:pointer;transition:all 0.3s;background:rgba(255,255,255,0.1);color:#fff}
+            .season-btn:hover{transform:scale(1.05);border-color:#fff}
+            .season-btn.active{border-color:#ffd700;background:rgba(255,215,0,0.3);box-shadow:0 0 15px rgba(255,215,0,0.5)}
+            #worldSelect{display:flex;gap:12px;margin:10px 0;flex-wrap:wrap;justify-content:center}
+            .world-btn{padding:12px 18px;font-size:16px;font-weight:bold;border:2px solid rgba(255,255,255,0.4);border-radius:10px;cursor:pointer;transition:all 0.3s;background:rgba(255,255,255,0.08);color:#fff}
+            .world-btn:hover{transform:scale(1.05);border-color:#fff}
+            .world-btn.active{border-color:#ffd700;box-shadow:0 0 12px rgba(255,215,0,0.5);background:rgba(255,215,0,0.15)}
+            #shopContainer{margin-top:20px;display:flex;gap:15px;justify-content:center;flex-wrap:wrap}
+            .vehicle-btn{padding:12px 20px;font-size:16px;font-weight:bold;border:2px solid rgba(255,255,255,0.5);border-radius:12px;cursor:pointer;transition:all 0.3s;background:rgba(255,255,255,0.1);color:#fff}
+            .vehicle-btn:hover{transform:scale(1.05);border-color:#fff}
+            .vehicle-btn.owned{border-color:#4caf50;background:rgba(76,175,80,0.2)}
+            .vehicle-btn.selected{border-color:#ff6b6b;background:rgba(255,107,107,0.3);box-shadow:0 0 15px rgba(255,107,107,0.5)}
+        </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+   
+    <div id="menuOverlay">
+        <div id="menuTitle">HillClimb Racing</div>
+        <div id="menuStats">
+            <div><span class="label">Total Coins:</span><span class="value" id="menuTotalCoins">0</span></div>
+            <div><span class="label">Highscore:</span><span class="value" id="menuHighscore">0</span></div>
+        </div>
+        <div id="seasonSelect">
+            <button class="season-btn active" data-season="summer">☀️ Summer</button>
+            <button class="season-btn" data-season="autumn">🍂 Autumn</button>
+            <button class="season-btn" data-season="winter">❄️ Winter</button>
+            <button class="season-btn" data-season="spring">🌸 Spring</button>
+        </div>
+        <div id="worldSelect">
+            <button class="world-btn active" data-world="earth">🌍 Earth</button>
+            <button class="world-btn" data-world="moon">🌕 Moon</button>
+            <button class="world-btn" data-world="lava">🌋 Lava Challenge</button>
+        </div>
+        <div id="shopContainer" style="color:#fff;font-size:14px;">
+            <div style="width:100%;text-align:center;margin-bottom:10px;">💰 <span id="shopCoins">0</span> Coins</div>
+            <button class="vehicle-btn selected" data-vehicle="car">🚗 Car</button>
+            <button class="vehicle-btn" data-vehicle="motorcycle" id="motoBtn">🏍️ Moto (300 💰)</button>
+            <button class="vehicle-btn" data-vehicle="sportscar" id="sportBtn">🏎️ Sport (600 💰)</button>
+        </div>
+        <button id="menuStartBtn">START GAME</button>
+        <button id="menuRestartBtn" style="display:none;">RESTART</button>
+        <div id="menuControls">
+            → Accelerate | ← Brake | In Air: Rotate<br>
+            Press ESC to pause
+        </div>
+    </div>
+   
+    <div id="ui">
+        <div class="score">Coins: <span id="score">0</span></div>
+        <div class="info">Speed: <span id="speed">0</span> m/s</div>
+    </div>
+    <div id="fuelBar">
+        <div id="fuelBarFill" style="width:100%"></div>
+        <div id="fuelLabel">Fuel: 100%</div>
+    </div>
+        <div class="hint">Controls: → accelerate, ← brake, ↑/Space jump</div>
+        <div class="touch-controls" aria-hidden="false">
+            <div id="btnLeft" class="control-btn">◀</div>
+            <div id="btnJump" class="control-btn">▲</div>
+            <div id="btnRight" class="control-btn">▶</div>
+        </div>
+ 
+    <script>
+    // HillClimb Racing 1 — copied & adapted from existing game code
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let W = canvas.width = innerWidth;
+    let H = canvas.height = innerHeight;
+ 
+    window.addEventListener('resize', ()=>{
+        W = canvas.width = innerWidth;
+        H = canvas.height = innerHeight;
+        // regenerate mountains so they fit the new viewport
+        try{ generateMountains(3); generateClouds(150); }catch(e){}
+    });
+ 
+    // Terrain generation
+    const step = 12; // px per sample
+    const terrain = [];
+        // bigger map and progressive hilliness
+        const worldLength = 160000; // px (large world to drive through)
+    function generateTerrain(){
+        terrain.length = 0;
+        const baseline = H*0.6;
+        const isLava = currentWorld === 'lava';
+        for(let x=0;x<=worldLength;x+=step){
+            const t = x / worldLength; // 0..1 progress
+            const ampScale = 1 + Math.pow(t, 1.6) * (isLava ? 6 : 4); // Steilere Hügel in Lava-Welt
+            const a1 = Math.sin(x * 0.002) * 120 * ampScale;
+            const a2 = Math.sin(x * 0.01) * (60 + t * (isLava ? 120 : 80));
+            const a3 = Math.sin(x * 0.03) * (20 + t * (isLava ? 60 : 40));
+            const a4 = Math.sin(x * 0.015 + Math.cos(x * 0.001)) * (30 * (1 + t * (isLava ? 3 : 2)));
+            const h = baseline + a1 + a2 + a3 + a4;
+            terrain.push({x, y: h});
+        }
+    }
+ 
+    function terrainHeightAt(x){
+        if(x<0) return terrain[0].y;
+        const i = Math.floor(x/step);
+        if(i>=terrain.length-1) return terrain[terrain.length-1].y;
+        const a = terrain[i], b = terrain[i+1];
+        const t = (x - a.x)/(b.x-a.x);
+        return a.y*(1-t) + b.y*t;
+    }
+ 
+    // Place coins along the terrain
+    const coins = [];
+        function generateCoins(){
+            coins.length = 0;
+            for(let x=200; x<worldLength-200; x+=Math.floor(100 + Math.random()*200)){
+                const cluster = Math.random() < 0.35 ? Math.floor(1 + Math.random()*2) : 1;
+                for(let k=0;k<cluster;k++){
+                    const px = x + (Math.random()-0.5)*40 + k*20;
+                    const y = terrainHeightAt(px) - 36 - Math.random()*20;
+                    coins.push({x:px,y,r:12,collected:false});
+                }
+            }
+        }
+ 
+    // Fuel canisters and fuel system
+    const fuelCanisters = [];
+    const fuelMax = 20; // seconds
+    let fuel = fuelMax;
+    const fuelGain = 12; // seconds added when picking up a canister
+    let lastFuelSpawnPos = 0; // spawn basierend auf Position, nicht Zeit
+    let gameTime = 0;
+    let dead = false;
+    let deathReason = '';
+    let explosion = {active:false, x:0, y:0, time:0, particles:[]};
+    let lastAngle = 0;
+    let airRotation = 0;
+    let flipsCompleted = 0;
+    const lavaPits = [];
+ 
+    function spawnFuel(px){
+        if(px === undefined) px = Math.min(Math.floor(car.x + W*0.4 + 50 + Math.random()*300), worldLength-200);
+        const y = terrainHeightAt(px) - 36 - Math.random()*12;
+        fuelCanisters.push({x: px, y, r:14, collected:false});
+    }
+ 
+    // Car
+    const car = {
+        x: 100,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        angle: 0,
+        angularVelocity: 0,
+        width: 80,
+        height: 24,
+        wheelRadius: 14,
+        wheelBase: 56,
+        onGround:false
+    };
+ 
+    // Camera
+    const cam = {x:0};
+ 
+    // Controls
+    const keys = {right:false,left:false,up:false};
+    addEventListener('keydown', e=>{
+        if(e.code==='ArrowRight' || e.key==='d') keys.right=true;
+        if(e.code==='ArrowLeft' || e.key==='a') keys.left=true;
+        if(e.code==='Enter' && dead){
+            showMenu();
+        }
+        if(e.code==='Escape'){
+            e.preventDefault();
+            if(!isPaused) showMenu();
+        }
+        //if(e.code==='ArrowUp' || e.code==='Space' || e.key==='w') keys.up=true;
+    });
+    addEventListener('keyup', e=>{
+        if(e.code==='ArrowRight' || e.key==='d') keys.right=false;
+        if(e.code==='ArrowLeft' || e.key==='a') keys.left=false;
+        //if(e.code==='ArrowUp' || e.code==='Space' || e.key==='w') keys.up=false;
+    });
+ 
+    // Score
+    let score = 0;
+    let highscore = parseInt(localStorage.getItem('hillclimb_highscore') || '0');
+    let totalCoins = parseInt(localStorage.getItem('hillclimb_totalcoins') || '0');
+    let gameRunning = false;
+    let isPaused = false;
+    let currentSeason = localStorage.getItem('hillclimb_season') || 'summer';
+    let currentWorld = localStorage.getItem('hillclimb_world') || 'earth';
+    let currentVehicle = localStorage.getItem('hillclimb_vehicle') || 'car';
+    let ownedVehicles = JSON.parse(localStorage.getItem('hillclimb_ownedVehicles') || '{"car":true}');
+   
+    // Fahrzeugdaten
+    const vehicles = {
+        car: { name:'Car', price:0, maxSpeed:500, angularAcceleration:16.0 },
+        motorcycle: { name:'Moto', price:300, maxSpeed:650, angularAcceleration:16.0*1.3 }, // 30% schneller rotieren
+        sportscar: { name:'Sport', price:600, maxSpeed:750, angularAcceleration:16.0*0.3 } // sehr langsam rotieren
+    };
+   
+    // Jahreszeiten-Farbpaletten
+    const seasonColors = {
+        summer: {
+            sky: '#87ceeb', skyGradientTop: '#87ceeb', skyGradientBottom: '#bfe8ff',
+            terrain: '#5a8f34', terrainEdge: '#3e621f',
+            mountainColor1: 'rgba(100,130,165,0.86)', mountainColor2: 'rgba(135,165,195,0.68)', mountainColor3: 'rgba(170,195,215,0.5)',
+            cloudColor: '#ffffff'
+        },
+        autumn: {
+            sky: '#ff9a56', skyGradientTop: '#ffb347', skyGradientBottom: '#ffe4b5',
+            terrain: '#8b7a3d', terrainEdge: '#6b5a2d',
+            mountainColor1: 'rgba(180,100,60,0.86)', mountainColor2: 'rgba(200,130,80,0.68)', mountainColor3: 'rgba(220,160,100,0.5)',
+            cloudColor: '#fff8dc'
+        },
+        winter: {
+            sky: '#b0d4e3', skyGradientTop: '#c0e0f0', skyGradientBottom: '#e8f4f8',
+            terrain: '#e8f4f8', terrainEdge: '#d0e8f0',
+            mountainColor1: 'rgba(200,210,230,0.86)', mountainColor2: 'rgba(220,230,245,0.68)', mountainColor3: 'rgba(240,245,255,0.5)',
+            cloudColor: '#f0f8ff'
+        },
+        spring: {
+            sky: '#b3e5fc', skyGradientTop: '#c8f7f5', skyGradientBottom: '#e0f7fa',
+            terrain: '#90ee90', terrainEdge: '#7bc67b',
+            mountainColor1: 'rgba(100,180,100,0.86)', mountainColor2: 'rgba(130,200,130,0.68)', mountainColor3: 'rgba(160,220,160,0.5)',
+            cloudColor: '#ffffff'
+        }
+    };
+
+    // Weltenkonfigurationen
+    const worldConfigs = {
+        earth: {
+            gravity: 700,
+            clouds: 150,
+            palette: (season) => seasonColors[season]
+        },
+        moon: {
+            gravity: 200,  // Sehr niedrige Gravitation
+            clouds: 0,
+            palette: () => ({
+                sky: '#0a0f1d', skyGradientTop: '#0a0f1d', skyGradientBottom: '#1c2740',
+                terrain: '#6f7075', terrainEdge: '#4f5055',
+                mountainColor1: 'rgba(120,130,140,0.9)', mountainColor2: 'rgba(90,100,110,0.7)', mountainColor3: 'rgba(70,80,90,0.55)',
+                cloudColor: '#ffffff'
+            })
+        },
+        lava: {
+            gravity: 950,  // Höhere Gravitation für mehr Challenge
+            clouds: 0,
+            palette: () => ({
+                sky: '#2a0c0c', skyGradientTop: '#3c1111', skyGradientBottom: '#5a1a0f',
+                terrain: '#5b2a1f', terrainEdge: '#3d1a12',
+                mountainColor1: 'rgba(120,60,40,0.9)', mountainColor2: 'rgba(150,70,45,0.7)', mountainColor3: 'rgba(200,90,50,0.55)',
+                cloudColor: '#ffddaa'
+            })
+        }
+    };
+   
+    function showMenu(){
+        isPaused = true;
+        document.getElementById('menuOverlay').classList.remove('hidden');
+        document.getElementById('menuTotalCoins').textContent = totalCoins;
+        document.getElementById('menuHighscore').textContent = highscore;
+        document.getElementById('shopCoins').textContent = totalCoins;
+        // Update vehicle buttons
+        document.querySelectorAll('.vehicle-btn').forEach(btn=>{
+            const key = btn.dataset.vehicle;
+            btn.classList.toggle('owned', !!ownedVehicles[key]);
+            btn.classList.toggle('selected', currentVehicle === key);
+        });
+       
+        // Update active season button
+        document.querySelectorAll('.season-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if(btn.dataset.season === currentSeason) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Update active world button
+        document.querySelectorAll('.world-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if(btn.dataset.world === currentWorld) {
+                btn.classList.add('active');
+            }
+        });
+       
+        // Show restart button if dead, start button otherwise
+        if(dead){
+            document.getElementById('menuStartBtn').style.display = 'none';
+            document.getElementById('menuRestartBtn').style.display = 'inline-block';
+        } else {
+            document.getElementById('menuStartBtn').style.display = 'inline-block';
+            document.getElementById('menuRestartBtn').style.display = 'none';
+        }
+    }
+   
+    function hideMenu(){
+        isPaused = false;
+        document.getElementById('menuOverlay').classList.add('hidden');
+    }
+   
+    function saveStats(){
+        localStorage.setItem('hillclimb_highscore', highscore);
+        localStorage.setItem('hillclimb_totalcoins', totalCoins);
+    }
+   
+    function startGame(){
+        if(!gameRunning || dead){
+            reset();
+        }
+        gameRunning = true;
+        hideMenu();
+    }
+ 
+    function reset(){
+        generateTerrain();
+        generateCoins();
+        // Wolkenanzahl abhängig von der Welt
+        const cloudCount = worldConfigs[currentWorld]?.clouds ?? 150;
+        generateClouds(cloudCount);
+        generateMountains(3);
+        car.x = 100;
+        car.vx = 0; car.vy = 0; car.angle = 0;
+        car.y = terrainHeightAt(car.x) - car.wheelRadius - car.height/2 - 6;
+        cam.x = 0;
+        score = 0;
+        coins.forEach(c=>c.collected=false);
+        document.getElementById('score').textContent = score;
+        fuel = fuelMax;
+        lastFuelSpawnPos = 0;
+        gameTime = 0;
+        fuelCanisters.length = 0;
+        dead = false;
+        deathReason = '';
+        explosion.active = false;
+        lastAngle = 0;
+        airRotation = 0;
+        flipsCompleted = 0;
+        updateFuelBar();
+        spawnFuel(car.x + 600);
+    }
+ 
+    document.getElementById('menuStartBtn').addEventListener('click', ()=>{ startGame(); });
+    document.getElementById('menuRestartBtn').addEventListener('click', ()=>{ startGame(); });
+    document.getElementById('menuRestartBtn').addEventListener('click', ()=>{ startGame(); });
+
+    // Vehicle buttons (shop)
+    document.querySelectorAll('.vehicle-btn').forEach(btn => {
+        btn.addEventListener('click', ()=>{
+            const key = btn.dataset.vehicle;
+            const v = vehicles[key];
+            if(!ownedVehicles[key]){
+                if(totalCoins >= v.price){
+                    totalCoins -= v.price;
+                    ownedVehicles[key] = true;
+                    saveStats();
+                    localStorage.setItem('hillclimb_ownedVehicles', JSON.stringify(ownedVehicles));
+                } else {
+                    return; // not enough coins
+                }
+            }
+            currentVehicle = key;
+            localStorage.setItem('hillclimb_vehicle', currentVehicle);
+            document.getElementById('shopCoins').textContent = totalCoins;
+            document.querySelectorAll('.vehicle-btn').forEach(b=>{
+                const k = b.dataset.vehicle;
+                b.classList.toggle('owned', !!ownedVehicles[k]);
+                b.classList.toggle('selected', currentVehicle === k);
+            });
+        });
+    });
+
+    // initial shop UI sync
+    document.getElementById('shopCoins').textContent = totalCoins;
+    document.querySelectorAll('.vehicle-btn').forEach(b=>{
+        const k = b.dataset.vehicle;
+        b.classList.toggle('owned', !!ownedVehicles[k]);
+        b.classList.toggle('selected', currentVehicle === k);
+    });
+
+    // Season button listeners
+    document.querySelectorAll('.season-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.season-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentSeason = btn.dataset.season;
+            localStorage.setItem('hillclimb_season', currentSeason);
+        });
+    });
+
+    // World button listeners
+    document.querySelectorAll('.world-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.world-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentWorld = btn.dataset.world;
+            localStorage.setItem('hillclimb_world', currentWorld);
+        });
+    });
+
+    function updateFuelBar(){
+        const pct = Math.max(0, (fuel / fuelMax) * 100);
+        const fill = document.getElementById('fuelBarFill');
+        const label = document.getElementById('fuelLabel');
+        fill.style.width = pct + '%';
+        label.textContent = 'Fuel: ' + Math.round(pct) + '%';
+        fill.classList.remove('low','critical');
+        if(pct < 30) fill.classList.add('low');
+        if(pct < 15) fill.classList.add('critical');
+    }
+
+    function triggerExplosion(x, y){
+        explosion.active = true;
+        explosion.x = x;
+        explosion.y = y;
+        explosion.time = 0;
+        explosion.particles = [];
+        for(let i=0; i<30; i++){
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 100 + Math.random() * 200;
+            explosion.particles.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 50,
+                life: 1,
+                size: 4 + Math.random() * 8,
+                color: Math.random() > 0.5 ? '#ff6b00' : '#ffdd00'
+            });
+        }
+    }
+ 
+    // Main update
+    let last = performance.now();
+    function loop(t){
+        const dt = Math.min(32, t-last);
+        last = t;
+        update(dt/1000);
+        draw();
+        requestAnimationFrame(loop);
+    }
+ 
+    function update(dt){
+        if(dead){
+            if(explosion.active){
+                explosion.time += dt;
+                for(const p of explosion.particles){
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.vy += 600 * dt;
+                    p.life -= dt * 0.8;
+                }
+                if(explosion.time > 2) explosion.active = false;
+            }
+            return;
+        }
+        gameTime += dt;
+        // Fuel spawnen basierend auf Position (nicht Zeit)
+        // Größere Abstände die progressiv wachsen: 3000 + (position/150)
+        const nextFuelDistance = 9000 + (car.x / 70);
+        if(car.x > lastFuelSpawnPos + nextFuelDistance){
+            spawnFuel();
+            lastFuelSpawnPos = car.x;
+        }
+        // Gravitation abhängig von der Welt
+        const gravity = worldConfigs[currentWorld]?.gravity || 700;
+        const engine = 1200;
+        const brake = 2200;
+        const airDrag = 0.3; // reduzierter Luftwiderstand
+        const veh = vehicles[currentVehicle] || vehicles.car;
+        const maxSpeed = veh.maxSpeed;
+        const angularAcceleration = veh.angularAcceleration;
+        let drive = 0;
+        // Motor und Bremse nur am Boden aktiv
+        if(car.onGround){
+            if(keys.right) drive = 1;
+            if(keys.left) drive = -0.7;
+            car.vx += drive * engine * dt;
+        }
+        // Luftwiderstand
+        car.vx *= (1 - Math.min(1, airDrag*dt));
+        // Maximale Geschwindigkeit begrenzen
+        if(car.vx > maxSpeed) car.vx = maxSpeed;
+        if(car.vx < -200) car.vx = -200; // Auch Rückwärts begrenzen
+        car.vy += gravity * dt;
+        car.x += car.vx * dt;
+        car.y += car.vy * dt;
+        const leftWheelX = car.x - car.wheelBase/2;
+        const rightWheelX = car.x + car.wheelBase/2;
+        const leftTerrain = terrainHeightAt(leftWheelX);
+        const rightTerrain = terrainHeightAt(rightWheelX);
+        const leftWheelY = leftTerrain - car.wheelRadius;
+        const rightWheelY = rightTerrain - car.wheelRadius;
+        const touchingLeft = car.y + car.height/2 + car.wheelRadius >= leftWheelY - 1;
+        const touchingRight = car.y + car.height/2 + car.wheelRadius >= rightWheelY -1;
+        // detect landing transition (was in air, now touching) so we can check for roof-landing
+        const wasOnGround = car.onGround;
+        const becameGround = !wasOnGround && (touchingLeft || touchingRight);
+        if(touchingLeft || touchingRight){
+            const avgWheelY = (leftWheelY + rightWheelY) * 0.5;
+            const targetBodyY = avgWheelY - car.wheelRadius - car.height/2;
+            const centerX = car.x;
+            const slopeLeft = (terrainHeightAt(centerX) - terrainHeightAt(centerX - step)) / step;
+            const slopeRight = (terrainHeightAt(centerX + step) - terrainHeightAt(centerX)) / step;
+            const minSpeedForLift = 80; // Noch niedrigere Mindestgeschwindigkeit
+            const slopeDiff = slopeLeft - slopeRight;
+            // Bei JEDEM Hügel springen, aber Lift variiert mit Steilheit
+            if(slopeDiff < -0.1 && car.vx > minSpeedForLift){
+                // Lift-Kraft basierend auf Steilheit - je steiler, desto höher
+                const speedFactor = car.vx / 120;
+                const steepnessFactor = Math.max(0.3, Math.abs(slopeDiff) * 2); // Min 0.3 für kleine Hügel
+                const lift = 120 * speedFactor * steepnessFactor;
+                car.vy = -lift;
+                car.y = targetBodyY;
+                car.onGround = false;
+                car.angularVelocity = -0.3 * steepnessFactor;
+            } else {
+                if(car.vy > 200) car.vx *= 0.7;
+                car.vy = 0;
+                car.y = targetBodyY;
+                car.onGround = true;
+                const targetAngle = Math.atan2(rightTerrain - leftTerrain, car.wheelBase);
+                car.angle += (targetAngle - car.angle) * 0.6;
+                car.angularVelocity = 0;
+                // if we just landed and the car is rotated mostly upside-down, count as game over
+                if(becameGround){
+                    // Check for completed flips while in air
+                    const fullRotations = Math.floor(Math.abs(airRotation) / (Math.PI * 2));
+                    if(fullRotations > 0){
+                        // Auf Mond: 25 Münzen pro Flip, sonst 5
+                        const flipReward = currentWorld === 'moon' ? 25 : 5;
+                        score += fullRotations * flipReward;
+                        document.getElementById('score').textContent = score;
+                        flipsCompleted += fullRotations;
+                    }
+                    airRotation = 0;
+                   
+                    // normalize angle to [0, 2*PI]
+                    let a = car.angle % (2*Math.PI);
+                    if(a < 0) a += 2*Math.PI;
+                    const deg = a * 180 / Math.PI;
+                    // Immer tot wenn auf Kopf/Dach gelandet (90-270 Grad)
+                    if(deg > 90 && deg < 270){
+                        dead = true;
+                        deathReason = 'Roof landing!';
+                        triggerExplosion(car.x, car.y);
+                        car.vx = 0; car.vy = 0;
+                        if(score > highscore) highscore = score;
+                        totalCoins += score;
+                        saveStats();
+                    }
+                }
+                // Keine Sprünge bei kleinen Hügeln mehr - nur bei steilen!
+            }
+        } else {
+            car.onGround = false;
+            // In der Luft: Gas/Bremse steuern nur Rotation, nicht Geschwindigkeit
+            if (keys.right) {
+                // Gas = nach links rotieren
+                car.angularVelocity -= angularAcceleration * dt;
+            }
+            if (keys.left) {
+                // Bremse = nach rechts rotieren
+                car.angularVelocity += angularAcceleration * dt;
+            }
+            const oldAngle = car.angle;
+            car.angle += car.angularVelocity * dt;
+            airRotation += car.angle - oldAngle;
+            // Noch weniger Luftwiderstand für präzisere und schnellere Kontrolle
+            car.angularVelocity *= 0.94;
+        }
+        // Auto darf nicht aus dem oberen Bildrand springen
+        const minScreenY = 50; // Mindestabstand vom oberen Rand
+        if(car.y < minScreenY){
+            car.y = minScreenY;
+            if(car.vy < 0) car.vy = 0; // Stoppe Aufwärtsbewegung
+        }
+       
+        // Check if car body (red part) touches ground
+        // Immer tot wenn Karosserie den Boden berührt
+        if(!dead){
+            const bodyBottomY = car.y + car.height/2;
+            const bodyTerrainHeight = terrainHeightAt(car.x);
+            if(bodyBottomY >= bodyTerrainHeight){
+                dead = true;
+                deathReason = 'Body hit ground!';
+                triggerExplosion(car.x, car.y);
+                car.vx = 0; car.vy = 0;
+                if(score > highscore) highscore = score;
+                totalCoins += score;
+                saveStats();
+            }
+        }
+       
+        cam.x = car.x - W*0.35;
+        if(cam.x < 0) cam.x = 0;
+        for(const c of coins){
+            if(c.collected) continue;
+            const dx = (c.x - car.x);
+            const dy = (c.y - car.y);
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist < 36){ c.collected = true; score++; document.getElementById('score').textContent = score; }
+        }
+        for(const f of fuelCanisters){
+            if(f.collected) continue;
+            const dx = (f.x - car.x);
+            const dy = (f.y - car.y);
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist < 36){ f.collected = true; fuel = Math.min(fuelMax, fuel + fuelGain); updateFuelBar(); }
+        }
+        // Fuel nur verbrauchen wenn am Boden und Gas gegeben wird
+        if(car.onGround && keys.right){
+            fuel -= dt * 1.5; // etwas schnellerer Verbrauch da nur bei Gas
+            if(fuel < 0) fuel = 0;
+            updateFuelBar();
+            if(fuel <= 0 && !dead){
+                dead = true;
+                deathReason = 'Out of fuel!';
+                triggerExplosion(car.x, car.y);
+                car.vx = 0; car.vy = 0;
+                if(score > highscore) highscore = score;
+                totalCoins += score;
+                saveStats();
+            }
+        }
+        document.getElementById('speed').textContent = Math.round(car.vx);
+    }
+ 
+    function draw(){
+        ctx.clearRect(0,0,W,H);
+        // Sky gradient - abhängig von Welt und Jahreszeit
+        const basePalette = worldConfigs[currentWorld]?.palette(currentSeason) || seasonColors[currentSeason];
+        const colors = basePalette;
+        const g = ctx.createLinearGradient(0,0,0,H);
+        g.addColorStop(0, colors.skyGradientTop);
+        g.addColorStop(1, colors.skyGradientBottom);
+        ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+       
+        // Weltspezifische Hintergründe
+        drawWorldBackground();
+       
+        // Draw season-specific decorations (background) - nur auf Earth
+        if(currentWorld === 'earth'){
+            drawSeasonBackground();
+        }
+ 
+        // draw mountain layers behind clouds
+        const startX = Math.max(0, Math.floor(cam.x/step)*step - step*2);
+        const endX = Math.min(worldLength, startX + (W + 400));
+        drawMountains(startX, endX);
+ 
+        // clouds (parallax, in front of mountains) - nicht auf Mond/Lava
+        if(worldConfigs[currentWorld]?.clouds > 0){
+            for(const cl of clouds){
+                const sx = cl.x - cam.x*0.45;
+                const wrapX = ((sx % (worldLength + W)) + (worldLength + W)) % (worldLength + W) - W*0.2;
+                const sy = cl.y + Math.sin((cl.off + performance.now()*0.0003)) * 6;
+                const s = cl.s;
+                if(wrapX < -300 || wrapX > W+300) continue;
+                ctx.globalAlpha = Math.min(1, cl.alpha * 0.98);
+                drawCloud(wrapX, sy, s);
+                ctx.globalAlpha = 1;
+            }
+        }
+        // terrain (foreground)
+        ctx.beginPath();
+        ctx.moveTo((startX - cam.x), H);
+        for(let x=startX;x<=endX;x+=step){
+            const y = terrainHeightAt(x);
+            ctx.lineTo(x - cam.x, y);
+        }
+        ctx.lineTo(endX - cam.x, H);
+        ctx.closePath();
+        ctx.fillStyle = colors.terrain;
+        ctx.fill();
+        ctx.beginPath();
+        for(let x=startX;x<=endX;x+=step){
+            const y = terrainHeightAt(x);
+            if(x===startX) ctx.moveTo(x-cam.x,y); else ctx.lineTo(x-cam.x,y);
+        }
+        ctx.strokeStyle = colors.terrainEdge; ctx.lineWidth = 2; ctx.stroke();
+       
+        // Weltspezifische Vordergrund-Elemente
+        drawWorldForeground(startX, endX);
+       
+        // Draw season-specific foreground decorations - nur auf Earth
+        if(currentWorld === 'earth'){
+            drawSeasonForeground(startX, endX);
+        }
+        for(const c of coins){
+            if(c.collected) continue;
+            const sx = c.x - cam.x, sy = c.y;
+            if(sx < -50 || sx > W+50) continue;
+            ctx.beginPath(); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.ellipse(sx, sy+12, 14,6,0,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.fillStyle = '#ffd700'; ctx.arc(sx,sy, c.r,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#b8860b'; ctx.lineWidth=2; ctx.stroke();
+        }
+        for(const f of fuelCanisters){
+            if(f.collected) continue;
+            const sx = f.x - cam.x, sy = f.y;
+            if(sx < -50 || sx > W+50) continue;
+            ctx.beginPath(); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.ellipse(sx, sy+12, 16,6,0,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#6b6bff'; ctx.fillRect(sx-12, sy-18, 24,28);
+            ctx.fillStyle = '#324cff'; ctx.fillRect(sx-6, sy-24, 12,8);
+            ctx.strokeStyle = '#142058'; ctx.lineWidth=2; ctx.strokeRect(sx-12, sy-18, 24,28);
+        }
+        ctx.save();
+        const carScreenX = car.x - cam.x;
+        const carScreenY = car.y;
+        ctx.translate(carScreenX, carScreenY);
+        ctx.rotate(car.angle);
+        drawVehicleSprite();
+        ctx.restore();
+       
+        // Draw explosion particles
+        if(explosion.active){
+            for(const p of explosion.particles){
+                if(p.life <= 0) continue;
+                const sx = p.x - cam.x;
+                const sy = p.y;
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(sx, sy, p.size * p.life, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+       
+        if(dead){
+            ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(deathReason + ' Game Over!', W/2, H/2 - 10);
+            ctx.font = '16px sans-serif'; ctx.fillText('Press Enter or Restart to try again', W/2, H/2 + 24);
+        }
+    }
+ 
+    // Mountains (layered background) + Clouds (parallax background)
+    const mountains = []; // array of layers, each with peaks
+    function generateMountains(layers = 3){
+        // create screen-space mountains so they appear static (no parallax)
+        // produce larger, hillier, and bluer low-contrast layers sized to the viewport
+        mountains.length = 0;
+        const basePalette = worldConfigs[currentWorld]?.palette(currentSeason) || seasonColors[currentSeason];
+        const colors = basePalette;
+        const colorSet = [colors.mountainColor1, colors.mountainColor2, colors.mountainColor3];
+       
+        for(let L=0; L<layers; L++){
+            const peaks = [];
+            // spacing grows with layer index to produce broader hills for distant layers
+            const spacing = Math.round(W * (0.12 + L * 0.08));
+            // baseline moved lower so mountain tops reach roughly halfway up the screen
+            const layerBaseline = H * 0.75 - L * 10; // lower baseline => peaks appear higher relative to bottom
+            // amplitude proportional to viewport height for consistent look across sizes
+            const layerAmp = Math.round(H * (0.18 + L * 0.06));
+            // generate peaks across the screen (screen-space) so they don't move with camera
+            for(let x = -spacing; x <= W + spacing; x += spacing + Math.floor(Math.random()*spacing*0.5)){
+                const w = Math.round(spacing * (0.9 + Math.random()*0.6));
+                const h = Math.round(layerAmp * (0.5 + Math.random()*1.1));
+                peaks.push({x: x + (Math.random()*120 - 60), h, w});
+            }
+            // use world and season-based colors
+            mountains.push({peaks, baseline: layerBaseline, color: colorSet[L]});
+        }
+    }
+ 
+    const clouds = [];
+    // spawn more and larger clouds by default; cloud count/size can be tuned
+    function generateClouds(count=150){
+        clouds.length = 0;
+        for(let i=0;i<count;i++){
+            const x = Math.random()*worldLength;
+            // place clouds across a broad vertical band but biased toward upper half
+            const y = 10 + Math.random()*(H*0.5);
+            // much larger clouds: doubled base size and increased variation
+            const s = Math.round((120 + Math.random()*400) * (0.9 + Math.random()*0.5));
+            clouds.push({x,y,s,off:Math.random()*10,alpha:0.5 + Math.random()*0.4});
+        }
+    }
+ 
+ 
+    function roundRect(ctx, x, y, w, h, r, fill, stroke){
+        if(typeof r === 'undefined') r = 5;
+        ctx.beginPath();
+        ctx.moveTo(x+r,y);
+        ctx.arcTo(x+w,y,x+w,y+h,r);
+        ctx.arcTo(x+w,y+h,x,y+h,r);
+        ctx.arcTo(x,y+h,x,y,r);
+        ctx.arcTo(x,y,x+w,y,r);
+        ctx.closePath();
+        if(fill) ctx.fill();
+        if(stroke) ctx.stroke();
+    }
+ 
+    function drawCloud(cx, cy, size){
+        ctx.save();
+        const basePalette = worldConfigs[currentWorld]?.palette(currentSeason) || seasonColors[currentSeason];
+        const colors = basePalette;
+        ctx.fillStyle = colors.cloudColor;
+        ctx.beginPath(); ctx.ellipse(cx - size*0.25, cy, size*0.32, size*0.22, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(cx + size*0.08, cy - size*0.06, size*0.38, size*0.26, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(cx + size*0.36, cy+ size*0.04, size*0.24, size*0.18, 0, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+
+    // Weltspezifische Hintergründe
+    function drawWorldBackground(){
+        if(currentWorld === 'moon'){
+            drawMoonBackground();
+        } else if(currentWorld === 'lava'){
+            drawLavaBackground();
+        }
+    }
+
+    function drawWorldForeground(startX, endX){
+        if(currentWorld === 'moon'){
+            drawMoonCraters(startX, endX);
+        } else if(currentWorld === 'lava'){
+            drawVolcanoes(startX, endX);
+        }
+    }
+
+    function drawMoonBackground(){
+        ctx.save();
+        // Sonne in der Ferne
+        ctx.fillStyle = '#ffdd55';
+        ctx.shadowColor = '#ffdd55';
+        ctx.shadowBlur = 30;
+        ctx.beginPath();
+        ctx.arc(W * 0.15, H * 0.2, 45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+       
+        // Erde im Hintergrund
+        ctx.fillStyle = '#4fa3ff';
+        ctx.beginPath();
+        ctx.arc(W * 0.8, H * 0.25, 35, 0, Math.PI * 2);
+        ctx.fill();
+        // Landmassen auf der Erde
+        ctx.fillStyle = '#3cb371';
+        ctx.beginPath();
+        ctx.arc(W * 0.8 + 8, H * 0.25 + 6, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(W * 0.8 - 10, H * 0.25 - 8, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawLavaBackground(){
+        ctx.save();
+        // Lava-Glühen im Hintergrund
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, 'rgba(255,120,60,0.12)');
+        grad.addColorStop(1, 'rgba(255,60,30,0.25)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+    }
+
+    function drawMoonCraters(startX, endX){
+        ctx.save();
+        ctx.fillStyle = 'rgba(100,100,100,0.3)';
+        const spacing = 800;
+        for(let x = Math.floor(startX / spacing) * spacing; x < endX; x += spacing){
+            const baseX = x + ((x / 173) % 400) - 200;
+            if(baseX < startX - 100 || baseX > endX + 100) continue;
+            const terrainY = terrainHeightAt(baseX);
+            const sx = baseX - cam.x;
+            const size = 20 + Math.random() * 30;
+            ctx.beginPath();
+            ctx.arc(sx, terrainY + 10, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function drawVolcanoes(startX, endX){
+        ctx.save();
+        const spacing = 1600;
+        for(let x = Math.floor(startX / spacing) * spacing; x < endX + spacing; x += spacing){
+            const baseX = x + ((x / 123) % spacing) - spacing/2;
+            if(baseX < startX - 200 || baseX > endX + 200) continue;
+            const terrainY = terrainHeightAt(baseX);
+            const sx = baseX - cam.x;
+            const h = 140;
+            // Vulkan-Körper
+            ctx.fillStyle = '#3b1a12';
+            ctx.beginPath();
+            ctx.moveTo(sx - 70, terrainY);
+            ctx.lineTo(sx, terrainY - h);
+            ctx.lineTo(sx + 70, terrainY);
+            ctx.closePath();
+            ctx.fill();
+            // Lava-Glühen am Gipfel
+            ctx.fillStyle = '#ff9933';
+            ctx.shadowColor = '#ff6633';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.moveTo(sx - 20, terrainY - h/2);
+            ctx.lineTo(sx, terrainY - h + 10);
+            ctx.lineTo(sx + 20, terrainY - h/2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+        ctx.restore();
+    }
+   
+    function drawSeasonBackground(){
+        // Draw large background decorations for season
+        if(currentSeason === 'spring'){
+            drawSpringBackground();
+        } else if(currentSeason === 'autumn'){
+            drawAutumnBackground();
+        } else if(currentSeason === 'winter'){
+            drawWinterBackground();
+        }
+    }
+   
+    function drawSeasonForeground(startX, endX){
+        // Draw decorations on terrain based on season
+        if(currentSeason === 'autumn'){
+            drawAutumnTrees(startX, endX);
+        } else if(currentSeason === 'winter'){
+            drawWinterDecorations(startX, endX);
+        } else if(currentSeason === 'spring'){
+            drawSpringFlowers(startX, endX);
+        } else if(currentSeason === 'summer'){
+            drawSummerTrees(startX, endX);
+        }
+    }
+   
+    function drawSpringBackground(){
+        // Flower fields in background
+        for(let i = 0; i < 40; i++){
+            const x = (cam.x * 0.3 + i * 200 + Math.sin(i) * 100) % W;
+            const y = H * 0.6 + Math.cos(i) * 50;
+           
+            // Flower clusters
+            ctx.fillStyle = 'rgba(255, 105, 180, 0.4)';
+            ctx.beginPath();
+            ctx.ellipse(x, y, 80, 40, Math.PI/6, 0, Math.PI*2);
+            ctx.fill();
+           
+            ctx.fillStyle = 'rgba(100, 200, 100, 0.3)';
+            ctx.beginPath();
+            ctx.ellipse(x + 50, y + 20, 60, 30, 0, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+   
+    function drawAutumnBackground(){
+        // Autumn glow
+        ctx.fillStyle = 'rgba(255, 100, 0, 0.08)';
+        ctx.fillRect(0, 0, W, H);
+    }
+   
+    function drawWinterBackground(){
+        // Falling snow effect
+        for(let i = 0; i < 50; i++){
+            const t = (performance.now() * 0.00005 + i * 0.02) % 1;
+            const x = (i * 30 + Math.sin(i + t * Math.PI * 4) * 50) % W;
+            const y = (t * H) - 50;
+           
+            ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.6 - t * 0.4) + ')';
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+   
+    function drawSummerTrees(startX, endX){
+        // Summer trees scattered on terrain
+        const spacing = 800;
+        for(let x = Math.floor(startX / spacing) * spacing - spacing; x < endX + spacing; x += spacing){
+            const baseX = x + ((x / 137) % 500) - 250;
+            if(baseX < startX || baseX > endX) continue;
+           
+            const terrainY = terrainHeightAt(baseX);
+            const screenX = baseX - cam.x;
+           
+            // Trunk
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(screenX - 8, terrainY - 80, 16, 80);
+           
+            // Foliage
+            ctx.fillStyle = '#228B22';
+            ctx.beginPath();
+            ctx.arc(screenX, terrainY - 70, 40, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#2d8f2d';
+            ctx.beginPath();
+            ctx.arc(screenX - 20, terrainY - 95, 35, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#32a132';
+            ctx.beginPath();
+            ctx.arc(screenX + 20, terrainY - 95, 35, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+   
+    function drawAutumnTrees(startX, endX){
+        // Autumn trees with colorful foliage
+        const spacing = 800;
+        for(let x = Math.floor(startX / spacing) * spacing - spacing; x < endX + spacing; x += spacing){
+            const baseX = x + ((x / 137) % 500) - 250;
+            if(baseX < startX || baseX > endX) continue;
+           
+            const terrainY = terrainHeightAt(baseX);
+            const screenX = baseX - cam.x;
+           
+            // Trunk
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(screenX - 8, terrainY - 80, 16, 80);
+           
+            // Autumn foliage - mix of red, orange, yellow
+            const colors = ['#FF6347', '#FF8C00', '#FFD700', '#DC143C'];
+            for(let i = 0; i < 3; i++){
+                ctx.fillStyle = colors[Math.floor((x/100 + i) % colors.length)];
+                ctx.beginPath();
+                const offsetX = (i - 1) * 25;
+                const offsetY = i === 1 ? -65 : -95;
+                ctx.arc(screenX + offsetX, terrainY + offsetY, 30 + i * 5, 0, Math.PI*2);
+                ctx.fill();
+            }
+           
+            // Falling leaves effect
+            ctx.fillStyle = 'rgba(255, 100, 0, 0.3)';
+            ctx.beginPath();
+            ctx.arc(screenX - 40, terrainY - 120 + Math.sin(performance.now()*0.001) * 20, 8, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+   
+    function drawWinterDecorations(startX, endX){
+        // Winter trees, snowmen, Christmas decorations
+        const spacing = 1000;
+        for(let x = Math.floor(startX / spacing) * spacing - spacing; x < endX + spacing; x += spacing){
+            const baseX = x + ((x / 137) % 500) - 250;
+            if(baseX < startX || baseX > endX) continue;
+           
+            const terrainY = terrainHeightAt(baseX);
+            const screenX = baseX - cam.x;
+            const variant = Math.floor((x / 1000) % 3);
+           
+            if(variant === 0){
+                // Snow-covered tree
+                ctx.fillStyle = '#654321';
+                ctx.fillRect(screenX - 8, terrainY - 80, 16, 80);
+               
+                ctx.fillStyle = '#e8f4f8';
+                ctx.beginPath();
+                ctx.arc(screenX, terrainY - 70, 40, 0, Math.PI*2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX - 20, terrainY - 95, 35, 0, Math.PI*2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 20, terrainY - 95, 35, 0, Math.PI*2);
+                ctx.fill();
+            } else if(variant === 1){
+                // Snowman
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(screenX, terrainY - 25, 20, 0, Math.PI*2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX, terrainY - 65, 18, 0, Math.PI*2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX, terrainY - 105, 14, 0, Math.PI*2);
+                ctx.fill();
+               
+                // Coal eyes
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(screenX - 5, terrainY - 108, 2, 0, Math.PI*2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(screenX + 5, terrainY - 108, 2, 0, Math.PI*2);
+                ctx.fill();
+               
+                // Carrot nose
+                ctx.fillStyle = '#FF8C00';
+                ctx.beginPath();
+                ctx.moveTo(screenX, terrainY - 105);
+                ctx.lineTo(screenX + 8, terrainY - 103);
+                ctx.lineTo(screenX, terrainY - 101);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                // Christmas tree with decorations
+                ctx.fillStyle = '#006400';
+                ctx.beginPath();
+                ctx.moveTo(screenX, terrainY - 100);
+                ctx.lineTo(screenX - 35, terrainY - 50);
+                ctx.lineTo(screenX + 35, terrainY - 50);
+                ctx.closePath();
+                ctx.fill();
+               
+                ctx.fillStyle = '#228B22';
+                ctx.beginPath();
+                ctx.moveTo(screenX, terrainY - 50);
+                ctx.lineTo(screenX - 28, terrainY);
+                ctx.lineTo(screenX + 28, terrainY);
+                ctx.closePath();
+                ctx.fill();
+               
+                // Ornaments
+                const ornamentColors = ['#FF0000', '#FFD700', '#00FF00'];
+                for(let i = 0; i < 6; i++){
+                    ctx.fillStyle = ornamentColors[i % 3];
+                    ctx.beginPath();
+                    ctx.arc(screenX - 15 + i * 6, terrainY - 65 + i * 8, 4, 0, Math.PI*2);
+                    ctx.fill();
+                }
+               
+                // Star on top
+                ctx.fillStyle = '#FFD700';
+                drawStar(screenX, terrainY - 105, 8);
+            }
+        }
+    }
+   
+    function drawSpringFlowers(startX, endX){
+        // Flowers scattered on terrain
+        const spacing = 300;
+        for(let x = Math.floor(startX / spacing) * spacing - spacing; x < endX + spacing; x += spacing){
+            const baseX = x + ((x / 73) % spacing) - spacing/2;
+            if(baseX < startX || baseX > endX) continue;
+           
+            const terrainY = terrainHeightAt(baseX);
+            const screenX = baseX - cam.x;
+           
+            // Stem
+            ctx.strokeStyle = '#228B22';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(screenX, terrainY);
+            ctx.lineTo(screenX + 3, terrainY - 25);
+            ctx.stroke();
+           
+            // Flower petals
+            const flowerColors = ['#FF69B4', '#FFB6C1', '#FFC0CB', '#FF1493', '#DA70D6'];
+            const color = flowerColors[Math.floor((x/50) % flowerColors.length)];
+            ctx.fillStyle = color;
+           
+            // 5 petals
+            for(let p = 0; p < 5; p++){
+                ctx.beginPath();
+                const angle = (p / 5) * Math.PI * 2;
+                const petalX = screenX + 3 + Math.cos(angle) * 8;
+                const petalY = terrainY - 25 + Math.sin(angle) * 8;
+                ctx.ellipse(petalX, petalY, 6, 10, angle, 0, Math.PI*2);
+                ctx.fill();
+            }
+           
+            // Center
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(screenX + 3, terrainY - 25, 4, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+   
+    function drawStar(cx, cy, size){
+        ctx.beginPath();
+        for(let i = 0; i < 5; i++){
+            const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+            const x = cx + Math.cos(angle) * size;
+            const y = cy + Math.sin(angle) * size;
+            if(i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+    }
+ 
+    // draw mountain layers between startX..endX (world coordinates)
+    function drawMountains(startX, endX){
+        // draw mountain layers as a fixed background (screen-space), independent of camera
+        // use a finer sample step for smoother hill shapes
+        const sampleStep = 24;
+        for(let li = mountains.length - 1; li >= 0; li--){
+            const layer = mountains[li];
+            ctx.beginPath();
+            ctx.moveTo(-50, H);
+            // sample across screen coordinates
+            for(let sx = -50; sx <= W + 50; sx += sampleStep){
+                let y = layer.baseline;
+                for(const p of layer.peaks){
+                    const dx = Math.abs(sx - p.x);
+                    const contrib = Math.max(0, 1 - dx / p.w);
+                    y -= p.h * contrib;
+                }
+                ctx.lineTo(sx, y);
+            }
+            ctx.lineTo(W + 50, H);
+            ctx.closePath();
+            ctx.fillStyle = layer.color;
+            ctx.fill();
+        }
+    }
+ 
+    // Vehicle rendering
+    function drawVehicleSprite(){
+        const veh = vehicles[currentVehicle] || vehicles.car;
+        if(currentVehicle === 'motorcycle'){
+            drawMoto(veh);
+        } else if(currentVehicle === 'sportscar'){
+            drawSport(veh);
+        } else {
+            drawCar(veh);
+        }
+    }
+
+    function drawCar(veh){
+        ctx.fillStyle = dead ? '#7a7a7a' : '#ef5350';
+        ctx.strokeStyle = dead ? '#555' : '#c43b3b';
+        ctx.lineWidth = 2;
+        roundRect(ctx, -car.width/2, -car.height/2 - 10, car.width, car.height, 8, true, true);
+        ctx.fillStyle = '#b3e5fc';
+        ctx.fillRect(-10, -car.height/2 - 8, car.width/3, car.height/2);
+        ctx.fillStyle='#222';
+        ctx.beginPath(); ctx.arc(-car.wheelBase/2, car.height/2+car.wheelRadius-6, car.wheelRadius,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(car.wheelBase/2, car.height/2+car.wheelRadius-6, car.wheelRadius,0,Math.PI*2); ctx.fill();
+    }
+
+    function drawMoto(veh){
+        // slim body
+        ctx.fillStyle = dead ? '#7a7a7a' : '#ff9800';
+        ctx.strokeStyle = dead ? '#555' : '#cc7700';
+        ctx.lineWidth = 2;
+        roundRect(ctx, -car.width/2 - 6, -car.height/2 - 8, car.width + 12, car.height - 2, 6, true, true);
+        // seat
+        ctx.fillStyle = dead ? '#666' : '#333';
+        roundRect(ctx, -10, -car.height/2 - 2, 28, 10, 4, true, false);
+        // front shield
+        ctx.fillStyle = '#8fd3ff'; ctx.globalAlpha = 0.65;
+        roundRect(ctx, car.width/4 - 8, -car.height/2 - 10, 16, car.height/2 + 6, 6, true, false);
+        ctx.globalAlpha = 1;
+        // wheels smaller
+        const r = car.wheelRadius - 2;
+        ctx.fillStyle='#222';
+        ctx.beginPath(); ctx.arc(-car.wheelBase/2, car.height/2 + r - 4, r, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(car.wheelBase/2, car.height/2 + r - 4, r, 0, Math.PI*2); ctx.fill();
+        // handlebar
+        ctx.strokeStyle = dead ? '#777' : '#ddd'; ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(car.width/2 - 10, -car.height/2 - 6);
+        ctx.lineTo(car.width/2 + 12, -car.height/2 - 12);
+        ctx.stroke();
+    }
+
+    function drawSport(veh){
+        // low, wide body
+        ctx.fillStyle = dead ? '#7a7a7a' : '#e53935';
+        ctx.strokeStyle = dead ? '#555' : '#b71c1c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-car.width/2 - 10, -car.height/2 + 4);
+        ctx.lineTo(car.width/2 + 12, -car.height/2 + 8);
+        ctx.lineTo(car.width/2 + 10, car.height/2 - 4);
+        ctx.lineTo(-car.width/2 - 6, car.height/2 - 6);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        // cockpit glass
+        ctx.fillStyle = '#9bd5ff'; ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.ellipse(-2, -car.height/2 + 6, car.width/3 + 8, car.height/3, 0, 0, Math.PI*2);
+        ctx.fill(); ctx.globalAlpha = 1;
+        // wheels larger, set back
+        const r = car.wheelRadius + 2;
+        ctx.fillStyle='#111';
+        ctx.beginPath(); ctx.arc(-car.wheelBase/2 - 2, car.height/2 + r - 5, r, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(car.wheelBase/2 + 4, car.height/2 + r - 5, r, 0, Math.PI*2); ctx.fill();
+        // spoiler
+        ctx.fillStyle = dead ? '#666' : '#d32f2f';
+        ctx.fillRect(-car.width/2 - 12, -car.height/2 - 6, 28, 6);
+    }
+
+        // touch / on-screen control handlers
+        function bindButton(id, keyName){
+            const el = document.getElementById(id);
+            if(!el) return;
+            const down = (ev)=>{ ev.preventDefault(); el.classList.add('active'); keys[keyName] = true; };
+            const up = (ev)=>{ ev.preventDefault(); el.classList.remove('active'); keys[keyName] = false; };
+            el.addEventListener('touchstart', down); el.addEventListener('touchend', up);
+            el.addEventListener('mousedown', down); el.addEventListener('mouseup', up);
+            el.addEventListener('mouseleave', up); el.addEventListener('touchcancel', up);
+            el.addEventListener('pointerdown', down); el.addEventListener('pointerup', up);
+        }
+        bindButton('btnLeft','left');
+        bindButton('btnRight','right');
+        bindButton('btnJump','up');
+ 
+    // start
+    reset();
+    requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
+ 
